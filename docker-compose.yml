@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+
+  # ─── MongoDB ────────────────────────────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: medchain-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: medchain
+    networks:
+      - medchain-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── IPFS (Kubo) ────────────────────────────────────────────────────────────
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: medchain-ipfs
+    restart: unless-stopped
+    ports:
+      - "4001:4001"   # Swarm
+      - "5001:5001"   # API
+      - "8081:8080"   # Gateway (use 8081 to avoid conflict with Hardhat)
+    volumes:
+      - ipfs_data:/data/ipfs
+    environment:
+      IPFS_PROFILE: server
+    networks:
+      - medchain-net
+    healthcheck:
+      test: ["CMD", "ipfs", "id"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ─── Hardhat Ethereum Node ───────────────────────────────────────────────────
+  hardhat:
+    build:
+      context: ./blockchain
+      dockerfile: Dockerfile
+    container_name: medchain-hardhat
+    restart: unless-stopped
+    ports:
+      - "8545:8545"
+    networks:
+      - medchain-net
+    healthcheck:
+      test: ["CMD", "curl", "-s", "-X", "POST", "--data",
+             "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}",
+             "-H", "Content-Type: application/json", "http://localhost:8545"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ─── ML Anomaly Detection ────────────────────────────────────────────────────
+  ml-service:
+    build:
+      context: ./ml
+      dockerfile: Dockerfile
+    container_name: medchain-ml
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    networks:
+      - medchain-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Spring Boot Backend ─────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medchain-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/medchain
+      ML_SERVICE_URL: http://ml-service:8000
+      JWT_SECRET: medchain_super_secret_key_2025_blockchain_secure_minimum_256_bits
+      JWT_EXPIRATION: 86400000
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
+      BLOCKCHAIN_ENABLED: "true"
+      BLOCKCHAIN_RPC_URL: http://hardhat:8545
+      BLOCKCHAIN_PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+      IPFS_API_URL: http://ipfs:5001
+      IPFS_GATEWAY_URL: http://ipfs:8080
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      ml-service:
+        condition: service_healthy
+    networks:
+      - medchain-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ─── React Frontend ───────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_MOCK_MODE: "false"
+        REACT_APP_API_URL: ""
+    container_name: medchain-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - medchain-net
+
+volumes:
+  mongo_data:
+  ipfs_data:
+
+networks:
+  medchain-net:
+    driver: bridge

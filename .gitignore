@@ -1,0 +1,27 @@
+# Java
+backend/target/
+
+# Node
+frontend/node_modules/
+frontend/build/
+blockchain/node_modules/
+blockchain/artifacts/
+blockchain/cache/
+blockchain/deployed.json
+
+# Python
+**/__pycache__/
+*.pyc
+ml/models/*.pkl
+scratch.js
+
+# Env
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# IDE
+.idea/
+.vscode/
+*.iml

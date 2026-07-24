@@ -1,0 +1,241 @@
+{
+  "info": {
+    "name": "MedChain API",
+    "description": "Blockchain-Aided Privacy-Preserving Medical Data Sharing",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080/api" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Patient",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Alice Johnson\",\n  \"email\": \"patient@medchain.com\",\n  \"password\": \"patient123\",\n  \"role\": \"PATIENT\",\n  \"phone\": \"+1-555-0101\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Register Doctor",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dr. Robert Smith\",\n  \"email\": \"doctor@medchain.com\",\n  \"password\": \"doctor123\",\n  \"role\": \"DOCTOR\",\n  \"phone\": \"+1-555-0102\",\n  \"attributes\": {\n    \"specialty\": \"Cardiology\",\n    \"hospital\": \"CityHospital\",\n    \"license\": \"Senior\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Login Patient",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": ["pm.collectionVariables.set('token', pm.response.json().token);"]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"patient@medchain.com\",\n  \"password\": \"patient123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login Doctor",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": ["pm.collectionVariables.set('token', pm.response.json().token);"]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"doctor@medchain.com\",\n  \"password\": \"doctor123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login Admin",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": ["pm.collectionVariables.set('token', pm.response.json().token);"]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@medchain.com\",\n  \"password\": \"admin123\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Records",
+      "item": [
+        {
+          "name": "Upload Record",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/records/upload",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Blood Test Results\",\n  \"description\": \"Complete blood count\",\n  \"recordType\": \"LAB_REPORT\",\n  \"accessPolicy\": \"(specialty=Cardiology AND hospital=CityHospital) OR (license=Senior)\",\n  \"content\": \"Patient CBC: WBC 7.2, RBC 4.8, HGB 14.2\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Patient Records",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/records/patient/:patientId",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Get Doctor Authorized Records",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/records/doctor/authorized",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Grant Access",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/records/:recordId/grant/:doctorId",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Revoke Access",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/records/:recordId/revoke/:doctorId",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "View Record (Doctor)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/records/:recordId/view",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin/dashboard",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "All Users",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin/users",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "All Logs",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin/logs",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Flagged Anomalies",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/admin/logs/flagged",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        },
+        {
+          "name": "Block User",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/admin/users/:userId/block",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ML Service",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8000/health"
+          }
+        },
+        {
+          "name": "Detect Anomaly",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:8000/detect",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hour\": 3,\n  \"day_of_week\": 6,\n  \"records_per_hour\": 15,\n  \"time_since_last\": 2,\n  \"specialty_match\": 0,\n  \"hospital_match\": 0,\n  \"access_freq_7d\": 50,\n  \"unique_patients_1h\": 10\n}"
+            }
+          }
+        },
+        {
+          "name": "Retrain Models",
+          "request": {
+            "method": "POST",
+            "url": "http://localhost:8000/train",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" }
+          }
+        },
+        {
+          "name": "Model Info",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8000/model-info"
+          }
+        }
+      ]
+    }
+  ]
+}
