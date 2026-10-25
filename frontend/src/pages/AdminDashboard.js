@@ -55,7 +55,7 @@ import Navbar from '../components/shared/Navbar';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import SkeletonCard from '../components/shared/SkeletonCard';
 import { useAuth } from '../context/AuthContext';
-import { adminService } from '../services/api';
+import api, { adminService } from '../services/api';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -154,7 +154,7 @@ export default function AdminDashboard() {
               variant="outlined"
               color="primary"
               startIcon={<CsvIcon />}
-              href="/api/reports/access-logs.csv"
+              href={`${api.defaults.baseURL}/reports/access-logs.csv`}
               target="_blank"
             >
               Export Logs (CSV)
@@ -163,7 +163,7 @@ export default function AdminDashboard() {
               variant="contained"
               color="primary"
               startIcon={<PdfIcon />}
-              href="/api/reports/access-logs.pdf"
+              href={`${api.defaults.baseURL}/reports/access-logs.pdf`}
               target="_blank"
             >
               Export Report (PDF)

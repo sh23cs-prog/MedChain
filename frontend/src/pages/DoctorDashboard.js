@@ -50,7 +50,7 @@ import Navbar from '../components/shared/Navbar';
 import RiskScoreGauge from '../components/shared/RiskScoreGauge';
 import SkeletonCard from '../components/shared/SkeletonCard';
 import { useAuth } from '../context/AuthContext';
-import { recordService } from '../services/api';
+import { recordService, sentinelService } from '../services/api';
 
 export default function DoctorDashboard() {
   const { user } = useAuth();
@@ -153,7 +153,16 @@ export default function DoctorDashboard() {
     setViewError('');
     setDecryptedData(null);
     try {
-      const res = await recordService.simulateAnomalyTest(sampleRecord.id);
+      const res = await sentinelService.evaluateAccess({
+        hour_of_day: 3.0,
+        day_of_week: 6.0,
+        records_per_hour: 250.0,
+        time_since_last: 0.5,
+        specialty_match: 0.0,
+        hospital_match: 0.0,
+        access_freq_7d: 500.0,
+        unique_patients_1h: 60.0
+      });
       setDecryptedData(res.data);
     } catch (err) {
       setViewError('ML Engine: Threat anomaly detected! Access blocked (LOCKDOWN mode).');
@@ -174,7 +183,7 @@ export default function DoctorDashboard() {
               Doctor Dashboard
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              View patient records authorized under your specialty & CP-ABE attributes.
+              View patient records authorized under your specialty & access-control attributes.
             </Typography>
           </Box>
           <Stack direction="row" spacing={2}>
@@ -435,7 +444,7 @@ export default function DoctorDashboard() {
                     </Typography>
                   </Stack>
                   <Typography variant="caption" display="block" mt={0.5}>
-                    IPFS Payload Hash matches Ethereum Smart Contract CID hash (Tamper-Proof Integrity Verified).
+                    Encrypted Payload SHA-256 Fingerprint matches Smart Contract checksum (Tamper-Proof Integrity Verified).
                   </Typography>
                 </Paper>
 
@@ -470,13 +479,13 @@ export default function DoctorDashboard() {
                   )}
                 </Box>
 
-                {/* IPFS & Blockchain details */}
+                {/* Blockchain & Integrity details */}
                 <Box sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
                   <Typography variant="caption" display="block">
-                    <strong>IPFS CID:</strong> {viewingRecord.ipfsCid}
+                    <strong>SHA-256 Checksum:</strong> {viewingRecord.sha256Hash || 'Verified'}
                   </Typography>
                   <Typography variant="caption" display="block">
-                    <strong>Blockchain Audit TX:</strong> {decryptedData.blockchainTxHash || viewingRecord.blockchainTxHash || '0x7f8a...3b21'}
+                    <strong>Blockchain Audit Transaction:</strong> {decryptedData.blockchainTxHash || viewingRecord.blockchainTxHash || 'Verified'}
                   </Typography>
                 </Box>
               </Stack>

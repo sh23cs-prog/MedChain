@@ -3,19 +3,12 @@ package com.medchain.service;
 import com.medchain.dto.RecordUploadRequest;
 import com.medchain.dto.UserResponse;
 import com.medchain.exception.MedChainException;
-import com.medchain.model.AccessLog;
-import com.medchain.model.AccessRequest;
-import com.medchain.model.MedicalRecord;
-import com.medchain.model.ReEncryptionKey;
-import com.medchain.model.User;
-import com.medchain.repository.AccessLogRepository;
-import com.medchain.repository.AccessRequestRepository;
-import com.medchain.repository.MedicalRecordRepository;
-import com.medchain.repository.ReEncryptionKeyRepository;
-import com.medchain.repository.UserRepository;
+import com.medchain.model.*;
+import com.medchain.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.Base64;
@@ -23,48 +16,107 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * RecordService — orchestrates the full medical record lifecycle:
- *
- *   UPLOAD:  File → AES-256-GCM encrypt → IPFS upload → Blockchain anchor
- *   GRANT:   Patient grants doctor access → PRE key generated → Blockchain event
- *   REVOKE:  Patient revokes doctor access → PRE key deleted → Blockchain event
- *   VIEW:    Doctor requests record → ML anomaly score → PRE decrypt → Blockchain log
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class RecordService {
 
-    private final MedicalRecordRepository   recordRepository;
-    private final UserRepository            userRepository;
-    private final AccessLogRepository       accessLogRepository;
+    private final MedicalRecordRepository recordRepository;
+    private final UserRepository userRepository;
+    private final AccessLogRepository accessLogRepository;
     private final ReEncryptionKeyRepository reKeyRepository;
-    private final AccessRequestRepository   accessRequestRepository;
+    private final AccessRequestRepository accessRequestRepository;
+    private final MLAlertRepository mlAlertRepository;
 
-    private final CPABEService             cpabeService;
+    private final FileValidationService fileValidationService;
+    private final FileStorageService fileStorageService;
+    private final AESEncryptionService aesService;
+    private final CPABEService cpabeService;
     private final ProxyReEncryptionService preService;
-    private final MLService                mlService;
-    private final BlockchainService        blockchainService;
-    private final AESEncryptionService     aesService;
-    private final IPFSService              ipfsService;
+    private final MLService mlService;
+    private final BlockchainService blockchainService;
+    private final AccessService accessService;
 
-    // ─── Upload ───────────────────────────────────────────────────────────────
+    // ─── Real File Upload ─────────────────────────────────────────────────────
 
-    /**
-     * Upload a medical record:
-     * 1. AES-256-GCM encrypt the file content
-     * 2. Upload encrypted bytes to IPFS
-     * 3. CP-ABE protect the AES key
-     * 4. Anchor metadata on the blockchain
-     * 5. Save everything to MongoDB
-     */
+    public MedicalRecord uploadMultipartFile(MultipartFile file, String title, String description,
+                                             String recordType, String patientEmail, String ipAddress) {
+        User patient = userRepository.findByEmail(patientEmail)
+                .orElseThrow(() -> new MedChainException("Patient not found for email: " + patientEmail));
+
+        // 1. Validate file (extension, size <= 50MB, MIME type, filename)
+        fileValidationService.validateFile(file);
+
+        String sanitizedFilename = fileValidationService.sanitizeFilename(file.getOriginalFilename());
+        byte[] plainBytes;
+        try {
+            plainBytes = file.getBytes();
+        } catch (Exception e) {
+            throw new MedChainException("Failed to read uploaded file bytes: " + e.getMessage());
+        }
+
+        // 2. Calculate SHA-256 over original unencrypted plaintext file
+        String sha256Hash = fileValidationService.calculateSHA256(plainBytes);
+        log.info("Calculated SHA-256 fingerprint for upload: {}", sha256Hash);
+
+        // 3. Encrypt payload using AES-256-GCM (12-byte secure random IV per file)
+        AESEncryptionService.EncryptionResult aesResult = aesService.encrypt(plainBytes);
+
+        // 4. Store encrypted payload off-chain
+        String storagePath = fileStorageService.storeEncryptedFile(aesResult.ciphertext(), sanitizedFilename);
+
+        // 5. Build and save MedicalRecord JPA entity
+        MedicalRecord record = new MedicalRecord();
+        record.setPatientId(patient.getId());
+        record.setPatientPID(patient.getPseudonymId());
+        record.setTitle(title != null && !title.isBlank() ? title : sanitizedFilename);
+        record.setDescription(description != null ? description : "");
+        record.setRecordType(recordType != null ? recordType : "CONSULTATION");
+        record.setFileName(sanitizedFilename);
+        record.setFileSize(formatFileSize(file.getSize()));
+        record.setFileMimeType(fileValidationService.detectMimeType(plainBytes, sanitizedFilename, file.getContentType()));
+        record.setSha256Hash(sha256Hash);
+        record.setStoragePath(storagePath);
+        record.setEncryptedContent(Base64.getEncoder().encodeToString(aesResult.ciphertext()));
+        record.setEncryptedAesKey(aesResult.aesKeyBase64());
+        record.setAesIv(aesResult.ivBase64());
+
+        String policy = "patient:" + patient.getId();
+        String policyHash = cpabeService.hashPolicy(policy);
+        record.setAccessPolicy(policy);
+        record.setPolicyHash(policyHash);
+
+        MedicalRecord saved = recordRepository.save(record);
+
+        // 6. Anchor metadata on blockchain
+        String txHash = blockchainService.uploadRecord(
+                saved.getId(), saved.getSha256Hash(), policyHash, patient.getPseudonymId());
+        saved.setBlockchainTxHash(txHash);
+        saved.setBlockchainRecordId("0x" + org.web3j.crypto.Hash.sha3String(saved.getId()).substring(2, 18));
+        recordRepository.save(saved);
+
+        // 7. Audit log
+        logAction(patient.getId(), patient.getName(), patient.getPseudonymId(),
+                saved.getId(), patient.getPseudonymId(), "UPLOAD", ipAddress, true);
+
+        log.info("Medical record '{}' (SHA256: {}) successfully uploaded and encrypted off-chain.", saved.getTitle(), sha256Hash);
+        return saved;
+    }
+
     public MedicalRecord uploadRecord(RecordUploadRequest req, String patientEmail, String ipAddress) {
         User patient = userRepository.findByEmail(patientEmail)
                 .orElseThrow(() -> new MedChainException("Patient not found"));
 
-        String policy     = req.getAccessPolicy() != null ? req.getAccessPolicy() : "";
-        String policyHash = cpabeService.hashPolicy(policy);
+        byte[] plainBytes = req.getContent() != null ? decodeContent(req.getContent()) : new byte[0];
+        if (plainBytes.length == 0) {
+            throw new MedChainException("File content cannot be empty.");
+        }
+
+        String sanitizedFilename = fileValidationService.sanitizeFilename(req.getFileName());
+        String sha256Hash = fileValidationService.calculateSHA256(plainBytes);
+
+        AESEncryptionService.EncryptionResult aesResult = aesService.encrypt(plainBytes);
+        String storagePath = fileStorageService.storeEncryptedFile(aesResult.ciphertext(), sanitizedFilename);
 
         MedicalRecord record = new MedicalRecord();
         record.setPatientId(patient.getId());
@@ -72,72 +124,52 @@ public class RecordService {
         record.setTitle(req.getTitle());
         record.setDescription(req.getDescription());
         record.setRecordType(req.getRecordType());
+        record.setFileName(sanitizedFilename);
+        record.setFileSize(req.getFileSize() != null ? req.getFileSize() : formatFileSize(plainBytes.length));
+        record.setFileMimeType(fileValidationService.detectMimeType(plainBytes, sanitizedFilename, req.getFileMimeType()));
+        record.setSha256Hash(sha256Hash);
+        record.setStoragePath(storagePath);
+        record.setEncryptedContent(Base64.getEncoder().encodeToString(aesResult.ciphertext()));
+        record.setEncryptedAesKey(aesResult.aesKeyBase64());
+        record.setAesIv(aesResult.ivBase64());
+
+        String policy = req.getAccessPolicy() != null ? req.getAccessPolicy() : "patient:" + patient.getId();
+        String policyHash = cpabeService.hashPolicy(policy);
         record.setAccessPolicy(policy);
         record.setPolicyHash(policyHash);
-        record.setFileName(req.getFileName());
-        record.setFileSize(req.getFileSize());
-        record.setFileMimeType(req.getFileMimeType());
 
-        // ── AES-256-GCM Encryption ──────────────────────────────────────────
-        if (req.getContent() != null && !req.getContent().isBlank()) {
-            try {
-                // Decode base64 content from client
-                byte[] plainBytes = decodeContent(req.getContent());
-
-                // Encrypt with AES-256-GCM
-                long encStart = System.currentTimeMillis();
-                AESEncryptionService.EncryptionResult aesResult = aesService.encrypt(plainBytes);
-                long encTime = System.currentTimeMillis() - encStart;
-                log.debug("AES encryption took {} ms for {} bytes", encTime, plainBytes.length);
-
-                // CP-ABE protect the AES key (simulated — wraps key with policy hash)
-                String encryptedAesKey = cpabeService.protectAesKey(aesResult.aesKeyBase64(), policy);
-                record.setEncryptedAesKey(encryptedAesKey);
-                record.setAesIv(aesResult.ivBase64());
-
-                // Also store encrypted content as base64 (fallback for text records)
-                record.setEncryptedContent(Base64.getEncoder().encodeToString(aesResult.ciphertext()));
-
-                // ── IPFS Upload ───────────────────────────────────────────────
-                String fileName = req.getFileName() != null ? req.getFileName() : "record.bin";
-                String cid = ipfsService.uploadFile(aesResult.ciphertext(), "enc_" + fileName);
-                record.setIpfsCid(cid);
-                log.info("Medical record uploaded to IPFS. CID: {}", cid);
-
-            } catch (Exception e) {
-                log.error("Encryption/IPFS pipeline failed: {}", e.getMessage());
-                // Fallback: store as-is with mock CID
-                record.setEncryptedContent(req.getContent());
-                record.setIpfsCid("Qm" + generateMockCid());
-            }
-        } else if (req.getIpfsCid() != null) {
-            // Client provided CID directly (pre-uploaded)
-            record.setIpfsCid(req.getIpfsCid());
-        } else {
-            record.setIpfsCid("Qm" + generateMockCid());
-        }
-
-        // ── Save to MongoDB ──────────────────────────────────────────────────
         MedicalRecord saved = recordRepository.save(record);
 
-        // ── Blockchain Anchor ────────────────────────────────────────────────
-        String txHash = blockchainService.uploadRecord(
-                saved.getId(), saved.getIpfsCid(), policyHash, patient.getPseudonymId());
+        String txHash = blockchainService.uploadRecord(saved.getId(), saved.getSha256Hash(), policyHash, patient.getPseudonymId());
         saved.setBlockchainTxHash(txHash);
         saved.setBlockchainRecordId("0x" + org.web3j.crypto.Hash.sha3String(saved.getId()).substring(2, 18));
         recordRepository.save(saved);
 
         logAction(patient.getId(), patient.getName(), patient.getPseudonymId(),
-                  saved.getId(), patient.getPseudonymId(), "UPLOAD", ipAddress, true);
+                saved.getId(), patient.getPseudonymId(), "UPLOAD", ipAddress, true);
 
-        log.info("Record '{}' uploaded successfully. IPFS: {} | TX: {}", saved.getTitle(), saved.getIpfsCid(), txHash);
         return saved;
     }
 
-    // ─── Retrieve ─────────────────────────────────────────────────────────────
+    // ─── Retrieve Records ────────────────────────────────────────────────────
 
-    public List<MedicalRecord> getPatientRecords(String patientId) {
-        return recordRepository.findByPatientId(patientId);
+    public List<MedicalRecord> getPatientRecords(String patientIdOrEmail) {
+        if (patientIdOrEmail == null || patientIdOrEmail.isBlank()) {
+            return List.of();
+        }
+        if (patientIdOrEmail.contains("@")) {
+            User patient = userRepository.findByEmail(patientIdOrEmail).orElse(null);
+            if (patient != null) {
+                return recordRepository.findByPatientId(patient.getId());
+            }
+        }
+        return recordRepository.findByPatientId(patientIdOrEmail);
+    }
+
+    public List<MedicalRecord> getDoctorRecords(String doctorEmail) {
+        User doctor = userRepository.findByEmail(doctorEmail)
+                .orElseThrow(() -> new MedChainException("Doctor not found"));
+        return recordRepository.findByAuthorizedDoctorIdsContaining(doctor.getId());
     }
 
     public List<UserResponse> getAllDoctors() {
@@ -148,13 +180,208 @@ public class RecordService {
         return userRepository.findByRole("PATIENT").stream().map(this::toUserResponse).toList();
     }
 
-    public List<MedicalRecord> getDoctorRecords(String doctorEmail) {
-        User doctor = userRepository.findByEmail(doctorEmail)
-                .orElseThrow(() -> new MedChainException("Doctor not found"));
-        return recordRepository.findByAuthorizedDoctorIdsContaining(doctor.getId());
+    // ─── View Record Flow with AES-256-GCM & SHA-256 Checksum Verification ──
+
+    public Map<String, Object> viewRecord(String recordId, String requesterEmail, String ipAddress) {
+        User requester = userRepository.findByEmail(requesterEmail)
+                .orElseThrow(() -> new MedChainException("User not found for email: " + requesterEmail));
+
+        MedicalRecord record = recordRepository.findById(recordId)
+                .orElseThrow(() -> new MedChainException("Record not found for ID: " + recordId));
+
+        // Enforce access request expiration
+        accessService.checkAndEnforceExpiration(recordId, requester.getId());
+        record = recordRepository.findById(recordId).orElse(record);
+
+        // 1. Authorization Verification
+        boolean isOwner = record.getPatientId().equals(requester.getId());
+        boolean isAuthorizedDoctor = record.getAuthorizedDoctorIds().contains(requester.getId());
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(requester.getRole());
+
+        if ("DOCTOR".equalsIgnoreCase(requester.getRole()) && !isOwner && !isAdmin) {
+            boolean hasActiveApprovedRequest = accessRequestRepository
+                    .findByRecordIdAndDoctorIdAndStatus(recordId, requester.getId(), "APPROVED")
+                    .isPresent();
+            if (!hasActiveApprovedRequest) {
+                isAuthorizedDoctor = false;
+            }
+        }
+
+        if (!isOwner && !isAuthorizedDoctor && !isAdmin) {
+            logAction(requester.getId(), requester.getName(), requester.getPseudonymId(),
+                    recordId, record.getPatientPID(), "VIEW", ipAddress, false, 0.95, 0.95, 0.95, "HIGH", "UNAUTHORIZED_DOCTOR_ACCESS", null);
+            throw new MedChainException("Access denied: You do not have active patient approval for this record.");
+        }
+
+        // Evaluate real-time behavioral telemetry via Sentinel AI
+        MLService.AnomalyRequest telemetryReq = mlService.buildTelemetry(requester, record);
+        MLService.AnomalyResponse mlRes = mlService.scoreAccess(telemetryReq, requester.getId(), recordId);
+
+        // 2. Read Encrypted Ciphertext Payload
+        byte[] ciphertext;
+        if (record.getStoragePath() != null && !record.getStoragePath().isBlank()) {
+            ciphertext = fileStorageService.readEncryptedFile(record.getStoragePath());
+        } else if (record.getEncryptedContent() != null && !record.getEncryptedContent().isBlank()) {
+            ciphertext = Base64.getDecoder().decode(record.getEncryptedContent());
+        } else {
+            throw new MedChainException("No encrypted payload found for this medical record.");
+        }
+
+        // 3. AES-256-GCM Decryption
+        byte[] decryptedBytes;
+        try {
+            decryptedBytes = aesService.decrypt(ciphertext, record.getEncryptedAesKey(), record.getAesIv());
+        } catch (Exception e) {
+            logAction(requester.getId(), requester.getName(), requester.getPseudonymId(),
+                    recordId, record.getPatientPID(), "INTEGRITY_FAILURE", ipAddress, false, 1.0, 1.0, 1.0, "CRITICAL", "AES-256-GCM authentication tag mismatch: Payload tampered", null);
+
+            MLAlert alert = new MLAlert();
+            alert.setUserId(requester.getId());
+            alert.setRecordId(recordId);
+            alert.setRecordTitle(record.getTitle());
+            alert.setDoctorName(requester.getName());
+            alert.setIpAddress(ipAddress != null && !ipAddress.isBlank() ? ipAddress : "Not available");
+            alert.setRiskScore(1.0);
+            alert.setRiskLevel("CRITICAL");
+            alert.setStatus("OPEN");
+            alert.setRationale("INTEGRITY FAILURE: AES-256-GCM tag mismatch on record ID: " + recordId);
+            mlAlertRepository.save(alert);
+
+            log.error("INTEGRITY FAILURE! GCM tag mismatch/tampering on record {}: {}", recordId, e.getMessage());
+            throw new MedChainException("Integrity check failed: AES-256-GCM authentication tag mismatch or payload corruption.", e);
+        }
+
+        // 4. SHA-256 Integrity Verification
+        String recalculatedSha256 = fileValidationService.calculateSHA256(decryptedBytes);
+        if (record.getSha256Hash() != null && !record.getSha256Hash().equalsIgnoreCase(recalculatedSha256)) {
+            // Stop delivery! Log INTEGRITY_FAILURE and create CRITICAL security alert.
+            logAction(requester.getId(), requester.getName(), requester.getPseudonymId(),
+                    recordId, record.getPatientPID(), "INTEGRITY_FAILURE", ipAddress, false, 1.0, 1.0, 1.0, "CRITICAL", "SHA-256 checksum mismatch: File payload tampered", null);
+
+            MLAlert alert = new MLAlert();
+            alert.setUserId(requester.getId());
+            alert.setRecordId(recordId);
+            alert.setRecordTitle(record.getTitle());
+            alert.setDoctorName(requester.getName());
+            alert.setIpAddress(ipAddress != null && !ipAddress.isBlank() ? ipAddress : "Not available");
+            alert.setRiskScore(1.0);
+            alert.setRiskLevel("CRITICAL");
+            alert.setStatus("OPEN");
+            alert.setRationale("INTEGRITY FAILURE: SHA-256 checksum mismatch (Stored: " + record.getSha256Hash() + " vs Calculated: " + recalculatedSha256 + ")");
+            mlAlertRepository.save(alert);
+
+            log.error("INTEGRITY FAILURE! SHA-256 mismatch on record {}: expected {} but calculated {}", recordId, record.getSha256Hash(), recalculatedSha256);
+            throw new MedChainException("Integrity check failed: File checksum mismatch. Delivery rejected for security reasons.");
+        }
+
+        // 5. Successful Verification
+        logAction(requester.getId(), requester.getName(), requester.getPseudonymId(),
+                recordId, record.getPatientPID(), "VIEW", ipAddress, true);
+
+        String effectiveMime = fileValidationService.detectMimeType(decryptedBytes, record.getFileName(), record.getFileMimeType());
+        String decryptedDataUrl = "data:" + effectiveMime + ";base64," + Base64.getEncoder().encodeToString(decryptedBytes);
+
+        return Map.of(
+                "record", record,
+                "sha256Hash", recalculatedSha256,
+                "integrityVerified", true,
+                "decryptedContent", decryptedDataUrl
+        );
     }
 
-    // ─── Access Request Flow ──────────────────────────────────────────────────
+    // ─── Authorized File Download ─────────────────────────────────────────────
+
+    public record DownloadedFile(byte[] fileBytes, String filename, String mimeType, String sha256Hash) {}
+
+    public DownloadedFile downloadRecordFile(String recordId, String requesterEmail, String ipAddress) {
+        User requester = userRepository.findByEmail(requesterEmail)
+                .orElseThrow(() -> new MedChainException("User not found for email: " + requesterEmail));
+
+        MedicalRecord record = recordRepository.findById(recordId)
+                .orElseThrow(() -> new MedChainException("Record not found for ID: " + recordId));
+
+        // Enforce access request expiration
+        accessService.checkAndEnforceExpiration(recordId, requester.getId());
+        record = recordRepository.findById(recordId).orElse(record);
+
+        boolean isOwner = record.getPatientId().equals(requester.getId());
+        boolean isAuthorizedDoctor = record.getAuthorizedDoctorIds().contains(requester.getId());
+        boolean isAdmin = "ADMIN".equalsIgnoreCase(requester.getRole());
+
+        if ("DOCTOR".equalsIgnoreCase(requester.getRole()) && !isOwner && !isAdmin) {
+            boolean hasActiveApprovedRequest = accessRequestRepository
+                    .findByRecordIdAndDoctorIdAndStatus(recordId, requester.getId(), "APPROVED")
+                    .isPresent();
+            if (!hasActiveApprovedRequest) {
+                isAuthorizedDoctor = false;
+            }
+        }
+
+        if (!isOwner && !isAuthorizedDoctor && !isAdmin) {
+            logAction(requester.getId(), requester.getName(), requester.getPseudonymId(),
+                    recordId, record.getPatientPID(), "DOWNLOAD", ipAddress, false, 0.95, 0.95, 0.95, "HIGH", "UNAUTHORIZED_DOCTOR_DOWNLOAD", null);
+            throw new MedChainException("Access denied: You do not have active patient approval to download this record.");
+        }
+
+        byte[] ciphertext;
+        if (record.getStoragePath() != null && !record.getStoragePath().isBlank()) {
+            ciphertext = fileStorageService.readEncryptedFile(record.getStoragePath());
+        } else if (record.getEncryptedContent() != null && !record.getEncryptedContent().isBlank()) {
+            ciphertext = Base64.getDecoder().decode(record.getEncryptedContent());
+        } else {
+            throw new MedChainException("No encrypted file stored for this record.");
+        }
+
+        byte[] decryptedBytes;
+        try {
+            decryptedBytes = aesService.decrypt(ciphertext, record.getEncryptedAesKey(), record.getAesIv());
+        } catch (Exception e) {
+            logAction(requester.getId(), requester.getName(), requester.getPseudonymId(),
+                    recordId, record.getPatientPID(), "INTEGRITY_FAILURE", ipAddress, false, 1.0, 1.0, 1.0, "CRITICAL", "AES-256-GCM authentication tag mismatch on download", null);
+
+            MLAlert alert = new MLAlert();
+            alert.setUserId(requester.getId());
+            alert.setRecordId(recordId);
+            alert.setRecordTitle(record.getTitle());
+            alert.setDoctorName(requester.getName());
+            alert.setIpAddress(ipAddress != null && !ipAddress.isBlank() ? ipAddress : "Not available");
+            alert.setRiskScore(1.0);
+            alert.setRiskLevel("CRITICAL");
+            alert.setStatus("OPEN");
+            alert.setRationale("INTEGRITY FAILURE ON DOWNLOAD: AES-256-GCM tag mismatch for record ID: " + recordId);
+            mlAlertRepository.save(alert);
+
+            throw new MedChainException("Integrity check failed: AES-256-GCM authentication tag mismatch. Download aborted.", e);
+        }
+
+        String recalculatedSha256 = fileValidationService.calculateSHA256(decryptedBytes);
+        if (record.getSha256Hash() != null && !record.getSha256Hash().equalsIgnoreCase(recalculatedSha256)) {
+            logAction(requester.getId(), requester.getName(), requester.getPseudonymId(),
+                    recordId, record.getPatientPID(), "INTEGRITY_FAILURE", ipAddress, false, 1.0, 1.0, 1.0, "CRITICAL", "SHA-256 checksum mismatch: File payload tampered", null);
+
+            MLAlert alert = new MLAlert();
+            alert.setUserId(requester.getId());
+            alert.setRecordId(recordId);
+            alert.setRecordTitle(record.getTitle());
+            alert.setDoctorName(requester.getName());
+            alert.setIpAddress(ipAddress != null && !ipAddress.isBlank() ? ipAddress : "Not available");
+            alert.setRiskScore(1.0);
+            alert.setRiskLevel("CRITICAL");
+            alert.setStatus("OPEN");
+            alert.setRationale("INTEGRITY FAILURE ON DOWNLOAD: SHA-256 checksum mismatch for record ID: " + recordId);
+            mlAlertRepository.save(alert);
+
+            throw new MedChainException("Integrity check failed: File checksum mismatch. File download aborted.");
+        }
+
+        logAction(requester.getId(), requester.getName(), requester.getPseudonymId(),
+                recordId, record.getPatientPID(), "DOWNLOAD", ipAddress, true);
+
+        String effectiveMime = fileValidationService.detectMimeType(decryptedBytes, record.getFileName(), record.getFileMimeType());
+        return new DownloadedFile(decryptedBytes, record.getFileName(), effectiveMime, recalculatedSha256);
+    }
+
+    // ─── Access Request & Grant/Revoke Methods ────────────────────────────────
 
     public AccessRequest requestAccess(String recordId, String doctorEmail) {
         User doctor = userRepository.findByEmail(doctorEmail)
@@ -198,14 +425,6 @@ public class RecordService {
         return accessRequestRepository.save(req);
     }
 
-    // ─── Grant Access ─────────────────────────────────────────────────────────
-
-    /**
-     * Patient grants doctor access:
-     * 1. Add doctor to authorized list
-     * 2. Generate PRE key for AES key re-encryption
-     * 3. Record access grant on blockchain
-     */
     public MedicalRecord grantAccess(String recordId, String doctorId, String patientEmail, String ipAddress) {
         User patient = userRepository.findByEmail(patientEmail)
                 .orElseThrow(() -> new MedChainException("Patient not found"));
@@ -222,7 +441,6 @@ public class RecordService {
             record.getAuthorizedDoctorIds().add(doctorId);
             record.getAuthorizedDoctorPIDs().add(doctor.getPseudonymId());
 
-            // Generate Proxy Re-Encryption key
             String rk = preService.generateReEncryptionKey(patient.getId(), doctor.getPseudonymId());
             ReEncryptionKey reKey = new ReEncryptionKey();
             reKey.setRecordId(recordId);
@@ -233,35 +451,42 @@ public class RecordService {
             reKey.setExpiry(LocalDateTime.now().plusDays(30));
             reKeyRepository.save(reKey);
 
-            // Blockchain event
-            String txHash = blockchainService.grantAccess(
-                    recordId, doctor.getPseudonymId(), patient.getPseudonymId());
-            record.setBlockchainTxHash(txHash);
+            if (blockchainService.isAvailable()) {
+                String txHash = blockchainService.grantAccess(recordId, doctor.getPseudonymId(), patient.getPseudonymId());
+                record.setBlockchainTxHash(txHash);
+            }
         }
 
         MedicalRecord saved = recordRepository.save(record);
         logAction(patient.getId(), patient.getName(), patient.getPseudonymId(),
-                  recordId, patient.getPseudonymId(), "GRANT", ipAddress, true);
+                recordId, patient.getPseudonymId(), "ACCESS_APPROVE", ipAddress, true);
 
-        // Mark pending request as granted
-        accessRequestRepository.findByRecordIdAndDoctorIdAndStatus(recordId, doctorId, "PENDING")
-                .ifPresent(r -> {
-                    r.setStatus("GRANTED");
-                    r.setUpdatedAt(LocalDateTime.now());
-                    accessRequestRepository.save(r);
-                });
+        Optional<AccessRequest> pendingOpt = accessRequestRepository.findByRecordIdAndDoctorIdAndStatus(recordId, doctorId, "PENDING");
+        if (pendingOpt.isPresent()) {
+            AccessRequest r = pendingOpt.get();
+            r.setStatus("APPROVED");
+            r.setExpiresAt(LocalDateTime.now().plusDays(30));
+            r.setUpdatedAt(LocalDateTime.now());
+            accessRequestRepository.save(r);
+        } else {
+            Optional<AccessRequest> approvedOpt = accessRequestRepository.findByRecordIdAndDoctorIdAndStatus(recordId, doctorId, "APPROVED");
+            if (approvedOpt.isEmpty()) {
+                AccessRequest r = new AccessRequest();
+                r.setRecordId(recordId);
+                r.setDoctorId(doctorId);
+                r.setPatientId(patient.getId());
+                r.setStatus("APPROVED");
+                r.setReason("Direct grant by patient");
+                r.setExpiresAt(LocalDateTime.now().plusDays(30));
+                r.setRequestedAt(LocalDateTime.now());
+                r.setUpdatedAt(LocalDateTime.now());
+                accessRequestRepository.save(r);
+            }
+        }
 
         return saved;
     }
 
-    // ─── Revoke Access ────────────────────────────────────────────────────────
-
-    /**
-     * Patient revokes doctor access:
-     * 1. Remove doctor from authorized list
-     * 2. Delete PRE key (forward security)
-     * 3. Record revocation on blockchain
-     */
     public MedicalRecord revokeAccess(String recordId, String doctorId, String patientEmail, String ipAddress) {
         User patient = userRepository.findByEmail(patientEmail)
                 .orElseThrow(() -> new MedChainException("Patient not found"));
@@ -276,159 +501,41 @@ public class RecordService {
         record.getAuthorizedDoctorIds().remove(doctorId);
         if (doctor != null) record.getAuthorizedDoctorPIDs().remove(doctor.getPseudonymId());
 
-        // Delete PRE key (forward security — doctor can no longer decrypt)
         reKeyRepository.deleteByRecordIdAndDoctorId(recordId, doctorId);
 
         String doctorPID = doctor != null ? doctor.getPseudonymId() : doctorId;
-        String txHash = blockchainService.revokeAccess(recordId, doctorPID, patient.getPseudonymId());
-        record.setBlockchainTxHash(txHash);
-
-        MedicalRecord saved = recordRepository.save(record);
-        logAction(patient.getId(), patient.getName(), patient.getPseudonymId(),
-                  recordId, patient.getPseudonymId(), "REVOKE", ipAddress, true);
-        return saved;
-    }
-
-    // ─── View Record (Doctor) ─────────────────────────────────────────────────
-
-    /**
-     * Doctor views a record:
-     * 1. Compute behavioral features from access history
-     * 2. Score with Isolation Forest (ML anomaly detection)
-     * 3. If allowed: PRE decrypt the AES key, then AES decrypt the content
-     * 4. Log access attempt on blockchain
-     */
-    public Map<String, Object> viewRecord(String recordId, String doctorEmail, String ipAddress) {
-        User doctor = userRepository.findByEmail(doctorEmail)
-                .orElseThrow(() -> new MedChainException("Doctor not found"));
-        MedicalRecord record = recordRepository.findById(recordId)
-                .orElseThrow(() -> new MedChainException("Record not found"));
-
-        LocalDateTime now          = LocalDateTime.now();
-        LocalDateTime oneHourAgo   = now.minusHours(1);
-        LocalDateTime sevenDaysAgo = now.minusDays(7);
-
-        // Compute behavioral features from access history
-        List<AccessLog> logsLastHour = accessLogRepository
-                .findByUserIdAndTimestampAfter(doctor.getId(), oneHourAgo);
-        long recordsPerHour         = logsLastHour.stream().filter(l -> "VIEW".equals(l.getAction())).count();
-        long uniquePatientsLastHour = logsLastHour.stream().map(AccessLog::getPatientPID).distinct().count();
-        long accessFreq7d           = accessLogRepository.countByUserIdAndTimestampAfter(doctor.getId(), sevenDaysAgo);
-
-        double timeSinceLast = logsLastHour.stream()
-                .filter(l -> "VIEW".equals(l.getAction()))
-                .map(AccessLog::getTimestamp)
-                .max(LocalDateTime::compareTo)
-                .map(t -> (double) java.time.Duration.between(t, now).toMinutes())
-                .orElse(60.0);
-
-        Map<String, String> doctorAttrs  = doctor.getAttributes() != null ? doctor.getAttributes() : Map.of();
-        User patient = userRepository.findById(record.getPatientId()).orElse(null);
-        Map<String, String> patientAttrs = (patient != null && patient.getAttributes() != null)
-                ? patient.getAttributes() : Map.of();
-
-        boolean specialtyMatch = cpabeService.attributesSatisfyPolicy(record.getAccessPolicy(), doctorAttrs);
-        boolean hospitalMatch  = doctorAttrs.getOrDefault("hospital", "")
-                .equals(patientAttrs.getOrDefault("hospital", ""));
-
-        // ML Risk Scoring
-        MLService.AnomalyRequest mlReq = new MLService.AnomalyRequest();
-        mlReq.setHour(now.getHour());
-        mlReq.setDay_of_week(now.getDayOfWeek().getValue());
-        mlReq.setRecords_per_hour(recordsPerHour);
-        mlReq.setTime_since_last(timeSinceLast);
-        mlReq.setSpecialty_match(specialtyMatch ? 1.0 : 0.0);
-        mlReq.setHospital_match(hospitalMatch ? 1.0 : 0.0);
-        mlReq.setAccess_freq_7d(accessFreq7d);
-        mlReq.setUnique_patients_1h(uniquePatientsLastHour);
-
-        MLService.AnomalyResponse mlRes = mlService.scoreAccess(mlReq);
-
-        boolean policyMatch = record.getAuthorizedDoctorIds().contains(doctor.getId());
-        boolean allowed     = policyMatch && !mlRes.isAnomaly();
-
-        // Blockchain audit log
-        String txHash = blockchainService.logAccessAttempt(
-                recordId, doctor.getPseudonymId(), allowed, mlRes.getRisk_level());
-
-        logAction(doctor.getId(), doctor.getName(), doctor.getPseudonymId(),
-                  recordId, record.getPatientPID(), "VIEW", ipAddress, allowed,
-                  mlRes.getAnomaly_score(), mlRes.getIsolation_score(),
-                  mlRes.getAutoencoder_score(), mlRes.getRisk_level(),
-                  allowed ? null : (mlRes.isAnomaly() ? "ANOMALY_DETECTED" : "POLICY_MISMATCH"),
-                  txHash);
-
-        if (!allowed) throw new MedChainException("Access denied: " + mlRes.getRisk_level());
-
-        // Decrypt content using PRE → AES pipeline
-        String decryptedContent = "";
-        if (record.getEncryptedContent() != null && record.getEncryptedAesKey() != null
-                && record.getAesIv() != null) {
-            try {
-                // Step 1: Recover AES key via PRE (simulated CP-ABE key decapsulation)
-                String aesKey = cpabeService.recoverAesKey(record.getEncryptedAesKey(), record.getAccessPolicy(), doctorAttrs);
-                // Step 2: AES-256-GCM decrypt
-                byte[] cipherBytes = Base64.getDecoder().decode(record.getEncryptedContent());
-                byte[] plainBytes  = aesService.decrypt(cipherBytes, aesKey, record.getAesIv());
-                decryptedContent   = "data:" + (record.getFileMimeType() != null ? record.getFileMimeType() : "text/plain")
-                                     + ";base64," + Base64.getEncoder().encodeToString(plainBytes);
-            } catch (Exception e) {
-                log.warn("Decryption failed for record {}: {}", recordId, e.getMessage());
-                // Fallback to legacy CP-ABE decryption
-                try {
-                    decryptedContent = cpabeService.decrypt(record.getEncryptedContent(), record.getAccessPolicy(), doctorAttrs);
-                } catch (Exception e2) {
-                    decryptedContent = "";
-                }
-            }
-        } else if (record.getEncryptedContent() != null) {
-            // Legacy records without AES pipeline
-            try {
-                decryptedContent = cpabeService.decrypt(record.getEncryptedContent(), record.getAccessPolicy(), doctorAttrs);
-            } catch (Exception e) {
-                decryptedContent = "";
-            }
+        if (blockchainService.isAvailable()) {
+            String txHash = blockchainService.revokeAccess(recordId, doctorPID, patient.getPseudonymId());
+            record.setBlockchainTxHash(txHash);
         }
 
-        return Map.of(
-            "record",           record,
-            "anomalyScore",     mlRes.getAnomaly_score(),
-            "riskScore",        mlRes.getRiskScore(),
-            "riskLevel",        mlRes.getRisk_level(),
-            "status",           mlRes.getStatus(),
-            "decryptionStatus", "AES_PRE_APPLIED",
-            "blockchainTxHash", txHash,
-            "decryptedContent", decryptedContent,
-            "ipfsGatewayUrl",   ipfsService.getGatewayUrl(record.getIpfsCid())
-        );
-    }
+        MedicalRecord saved = recordRepository.save(record);
 
-    // ─── File Download (raw bytes) ─────────────────────────────────────────────
+        accessRequestRepository.findByRecordIdAndDoctorIdAndStatus(recordId, doctorId, "APPROVED")
+                .ifPresent(r -> {
+                    r.setStatus("REVOKED");
+                    r.setUpdatedAt(LocalDateTime.now());
+                    accessRequestRepository.save(r);
+                });
 
-    public String getRecordFile(String recordId, String doctorEmail) {
-        User doctor = userRepository.findByEmail(doctorEmail)
-                .orElseThrow(() -> new MedChainException("Doctor not found"));
-        MedicalRecord record = recordRepository.findById(recordId)
-                .orElseThrow(() -> new MedChainException("Record not found"));
-
-        if (!record.getAuthorizedDoctorIds().contains(doctor.getId()))
-            throw new MedChainException("Access denied");
-
-        if (record.getEncryptedContent() == null)
-            throw new MedChainException("No file content stored for this record");
-
-        Map<String, String> doctorAttrs = doctor.getAttributes() != null ? doctor.getAttributes() : Map.of();
-        return cpabeService.decrypt(record.getEncryptedContent(), record.getAccessPolicy(), doctorAttrs);
+        logAction(patient.getId(), patient.getName(), patient.getPseudonymId(),
+                recordId, patient.getPseudonymId(), "ACCESS_REVOKE", ipAddress, true);
+        return saved;
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
+    private String formatFileSize(long bytes) {
+        if (bytes < 1024) return bytes + " B";
+        int exp = (int) (Math.log(bytes) / Math.log(1024));
+        char pre = "KMGTPE".charAt(exp - 1);
+        return String.format("%.1f %cB", bytes / Math.pow(1024, exp), pre);
+    }
+
     private byte[] decodeContent(String content) {
         if (content.contains(",")) {
-            // data URL format: data:mime;base64,xxxxx
             return Base64.getDecoder().decode(content.substring(content.indexOf(',') + 1));
         }
-        // Plain base64
         return Base64.getDecoder().decode(content);
     }
 
@@ -466,21 +573,7 @@ public class RecordService {
         log.setRiskLevel(riskLevel);
         log.setFlagged(anomalyScore > 0.6);
         log.setDenyReason(denyReason);
-        log.setBlockchainTxHash(txHash != null ? txHash : blockchainMockTx());
+        log.setBlockchainTxHash(txHash != null ? txHash : "0x" + Long.toHexString(System.nanoTime()));
         accessLogRepository.save(log);
-    }
-
-    private static String blockchainMockTx() {
-        try {
-            java.security.MessageDigest d = java.security.MessageDigest.getInstance("SHA3-256");
-            byte[] hash = d.digest((System.nanoTime() + "").getBytes());
-            return "0x" + java.util.HexFormat.of().formatHex(hash);
-        } catch (Exception e) {
-            return "0x" + Long.toHexString(System.nanoTime()) + "0".repeat(48);
-        }
-    }
-
-    private String generateMockCid() {
-        return Long.toHexString(System.currentTimeMillis()) + "abc123def456";
     }
 }

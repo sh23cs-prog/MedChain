@@ -185,7 +185,7 @@ export default function Monitoring() {
               <ServiceCard name="Hardhat Ethereum Node" desc="Port 8545 • EVM Smart Contracts" status={metrics?.services?.blockchain ?? true} />
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
-              <ServiceCard name="IPFS Kubo Node" desc="Port 5001 • Content-Addressed P2P" status={metrics?.services?.ipfs ?? true} />
+              <ServiceCard name="AES-256-GCM Off-Chain Store" desc="Local Encrypted Payload Storage" status={metrics?.services?.database ?? true} />
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
               <ServiceCard name="React Frontend SPA" desc="Port 3000 • Material-UI Dashboard" status={true} />

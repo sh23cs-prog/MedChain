@@ -5,7 +5,6 @@ import com.medchain.repository.AccessLogRepository;
 import com.medchain.repository.MedicalRecordRepository;
 import com.medchain.repository.UserRepository;
 import com.medchain.service.BlockchainService;
-import com.medchain.service.IPFSService;
 import com.medchain.service.MLService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -39,7 +38,6 @@ public class MetricsController {
 
     private final MLService            mlService;
     private final BlockchainService    blockchainService;
-    private final IPFSService          ipfsService;
     private final UserRepository       userRepository;
     private final MedicalRecordRepository recordRepository;
     private final AccessLogRepository  accessLogRepository;
@@ -70,7 +68,6 @@ public class MetricsController {
         long mlLatency   = mlService.getResponseTimeMs();
         boolean mlUp     = mlLatency >= 0;
         boolean chainUp  = blockchainService.isAvailable();
-        boolean ipfsUp   = ipfsService.isAvailable();
 
         // ── Realistic Demo Values for Encryption/Blockchain latency ──────────
         int encryptionTimeMs   = 8  + ThreadLocalRandom.current().nextInt(12);  // AES-GCM ~10ms
@@ -83,10 +80,9 @@ public class MetricsController {
         // ── Service Status Map ───────────────────────────────────────────────
         Map<String, Object> services = new HashMap<>();
         services.put("backend",    true);          // We are responding, so backend is up
-        services.put("mongodb",    isDatabaseUp()); // Quick MongoDB check
+        services.put("database",   isDatabaseUp()); // Quick JPA Database check
         services.put("ml",         mlUp);
         services.put("blockchain", chainUp);
-        services.put("ipfs",       ipfsUp);
 
         // ── Platform Stats ───────────────────────────────────────────────────
         metrics.put("encryptionTimeMs",    encryptionTimeMs);

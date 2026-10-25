@@ -12,6 +12,8 @@ import Monitoring from './pages/Monitoring';
 import BlockchainExplorer from './pages/BlockchainExplorer';
 import Architecture from './pages/Architecture';
 
+import OtpVerification from './pages/OtpVerification';
+
 const PrivateRoute = ({ children, role }) => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
@@ -33,6 +35,7 @@ export default function App() {
             <Route path="/" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/verify-otp" element={<OtpVerification />} />
             <Route
               path="/patient"
               element={

@@ -26,8 +26,8 @@ const FLOWCHART_STEPS = [
   { step: '2', title: 'Authentication & Role Check', desc: 'System verifies role (PATIENT/DOCTOR/ADMIN) and issues secure Bearer token.', icon: '🔑', color: '#06b6d4' },
   { step: '3', title: 'Blockchain Identity Verification', desc: 'Verifies SHA3-256 Pseudonym (PID = SHA3-256(identity ∥ nonce)) on EVM smart contract.', icon: '🛡️', color: '#10b981' },
   { step: '4', title: 'Encrypted Medical Record Request', desc: 'Doctor submits access request with CP-ABE attribute parameters (specialty/hospital).', icon: '📄', color: '#a855f7' },
-  { step: '5', title: 'Retrieve Encrypted File (Off-chain Storage)', desc: 'Backend fetches AES-256-GCM ciphertext payload from IPFS Kubo node using content CID.', icon: '📦', color: '#f59e0b' },
-  { step: '6', title: 'Blockchain Hash Verification', desc: 'Computes SHA256(IPFS_Payload) and verifies matching hash registered on Ethereum ledger.', icon: '⛓️', color: '#ef4444' },
+  { step: '5', title: 'Retrieve Encrypted File (Off-chain Storage)', desc: 'Backend fetches AES-256-GCM ciphertext payload from secure off-chain storage.', icon: '📦', color: '#f59e0b' },
+  { step: '6', title: 'Blockchain Hash Verification', desc: 'Computes SHA256(Payload) and verifies matching hash registered on Hardhat EVM smart contract.', icon: '⛓️', color: '#ef4444' },
   { step: '7', title: 'Machine Learning Risk Analysis', desc: 'FastAPI Isolation Forest + Autoencoder evaluates 8 behavioral telemetry features in real-time.', icon: '🧠', color: '#ec4899' },
   { step: '8', title: 'Explainable AI Report', desc: 'Generates detailed risk breakdown (isolation outlier probability, autoencoder reconstruction error, time/specialty anomalies).', icon: '📊', color: '#8b5cf6' },
 ];

@@ -12,6 +12,10 @@ import {
   IconButton,
   InputAdornment,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   Visibility,
@@ -20,6 +24,7 @@ import {
   Person as PersonIcon,
   MedicalServices as DoctorIcon,
   AdminPanelSettings as AdminIcon,
+  LockReset as ResetIcon,
 } from '@mui/icons-material';
 import Navbar from '../components/shared/Navbar';
 import { useAuth } from '../context/AuthContext';
@@ -31,6 +36,16 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Forgot / Reset Password Dialog State
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetStep, setResetStep] = useState(1); // 1: request OTP, 2: verify OTP & set new password
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetOtp, setResetOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState('');
 
   const { login: authLogin } = useAuth();
   const navigate = useNavigate();
@@ -73,6 +88,44 @@ export default function Login() {
       setError(err.response?.data?.message || err.message || 'Demo login failed.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSendResetOtp = async (e) => {
+    e.preventDefault();
+    setResetError('');
+    setResetSuccess('');
+    setResetLoading(true);
+    try {
+      await authService.forgotPassword(resetEmail);
+      setResetSuccess('Password reset OTP sent to email. Check your inbox.');
+      setResetStep(2);
+    } catch (err) {
+      setResetError(err.response?.data?.message || err.message || 'Failed to send reset code.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleConfirmReset = async (e) => {
+    e.preventDefault();
+    setResetError('');
+    setResetSuccess('');
+    setResetLoading(true);
+    try {
+      await authService.resetPassword({ email: resetEmail, otp: resetOtp, newPassword });
+      setResetSuccess('Password updated successfully! You can now log in with your new password.');
+      setTimeout(() => {
+        setResetDialogOpen(false);
+        setResetStep(1);
+        setResetEmail('');
+        setResetOtp('');
+        setNewPassword('');
+      }, 2000);
+    } catch (err) {
+      setResetError(err.response?.data?.message || err.message || 'Password reset failed.');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -124,6 +177,17 @@ export default function Login() {
                 }}
               />
 
+              <Box textAlign="right">
+                <Button
+                  size="small"
+                  color="primary"
+                  onClick={() => { setResetDialogOpen(true); setResetStep(1); setResetError(''); setResetSuccess(''); }}
+                  sx={{ textTransform: 'none', fontWeight: 600 }}
+                >
+                  Forgot Password?
+                </Button>
+              </Box>
+
               <Button
                 type="submit"
                 variant="contained"
@@ -148,7 +212,7 @@ export default function Login() {
               variant="outlined"
               size="small"
               startIcon={<PersonIcon color="info" />}
-              onClick={() => handleDemoLogin('patient@medchain.com', 'patient123')}
+              onClick={() => handleDemoLogin('patient@medchain.com', 'Password123!')}
             >
               Patient: patient@medchain.com
             </Button>
@@ -156,7 +220,7 @@ export default function Login() {
               variant="outlined"
               size="small"
               startIcon={<DoctorIcon color="success" />}
-              onClick={() => handleDemoLogin('doctor@medchain.com', 'doctor123')}
+              onClick={() => handleDemoLogin('doctor@medchain.com', 'Password123!')}
             >
               Doctor: doctor@medchain.com
             </Button>
@@ -164,7 +228,7 @@ export default function Login() {
               variant="outlined"
               size="small"
               startIcon={<AdminIcon color="secondary" />}
-              onClick={() => handleDemoLogin('admin@medchain.com', 'admin123')}
+              onClick={() => handleDemoLogin('admin@medchain.com', 'Password123!')}
             >
               Admin: admin@medchain.com
             </Button>
@@ -180,6 +244,71 @@ export default function Login() {
           </Box>
         </Paper>
       </Container>
+
+      {/* Forgot / Reset Password Modal */}
+      <Dialog open={resetDialogOpen} onClose={() => setResetDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 700 }}>
+          <ResetIcon color="primary" /> Reset Account Password
+        </DialogTitle>
+        <DialogContent dividers>
+          {resetError && <Alert severity="error" sx={{ mb: 2 }}>{resetError}</Alert>}
+          {resetSuccess && <Alert severity="success" sx={{ mb: 2 }}>{resetSuccess}</Alert>}
+
+          {resetStep === 1 ? (
+            <form id="forgot-form" onSubmit={handleSendResetOtp}>
+              <Stack spacing={2} pt={1}>
+                <Typography variant="body2" color="text.secondary">
+                  Enter your registered email address to receive a 6-digit password reset OTP code.
+                </Typography>
+                <TextField
+                  label="Registered Email"
+                  type="email"
+                  required
+                  fullWidth
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                />
+              </Stack>
+            </form>
+          ) : (
+            <form id="reset-form" onSubmit={handleConfirmReset}>
+              <Stack spacing={2} pt={1}>
+                <Typography variant="body2" color="text.secondary">
+                  Enter the 6-digit code sent to <strong>{resetEmail}</strong> and your new password.
+                </Typography>
+                <TextField
+                  label="6-Digit OTP Code"
+                  required
+                  fullWidth
+                  value={resetOtp}
+                  onChange={(e) => setResetOtp(e.target.value)}
+                  inputProps={{ maxLength: 6, style: { letterSpacing: 4, textAlign: 'center', fontWeight: 700 } }}
+                />
+                <TextField
+                  label="New Password"
+                  type="password"
+                  required
+                  fullWidth
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </Stack>
+            </form>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setResetDialogOpen(false)}>Cancel</Button>
+          {resetStep === 1 ? (
+            <Button type="submit" form="forgot-form" variant="contained" disabled={resetLoading}>
+              {resetLoading ? 'Sending...' : 'Send Reset Code'}
+            </Button>
+          ) : (
+            <Button type="submit" form="reset-form" variant="contained" disabled={resetLoading}>
+              {resetLoading ? 'Updating...' : 'Set New Password'}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

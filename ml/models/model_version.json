@@ -1,0 +1,15 @@
+{
+  "version": "v1.2.0",
+  "trained_at": "2026-08-27T13:23:43.057931",
+  "algorithm": "IsolationForest",
+  "n_estimators": 200,
+  "contamination": 0.09,
+  "num_features": 8,
+  "status": "HEALTHY",
+  "risk_thresholds": {
+    "LOW": "< 0.25",
+    "MEDIUM": "0.25 - 0.49",
+    "HIGH": "0.50 - 0.74",
+    "CRITICAL": ">= 0.75"
+  }
+}

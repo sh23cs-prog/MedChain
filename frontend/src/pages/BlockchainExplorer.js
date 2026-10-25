@@ -125,11 +125,11 @@ export default function BlockchainExplorer() {
           </Grid>
         </Grid>
 
-        {/* Search & Transactions Table */}
-        <Paper elevation={2} sx={{ p: 3, borderRadius: 3 }}>
+        {/* Search Bar & Counter */}
+        <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3, mb: 3 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3} spacing={2}>
             <TextField
-              placeholder="Search by Tx Hash, IPFS CID, Event, or Pseudonym PID..."
+              placeholder="Search by Tx Hash, SHA-256 Checksum, Event, or Pseudonym PID..."
               size="small"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -140,7 +140,7 @@ export default function BlockchainExplorer() {
                   </InputAdornment>
                 ),
               }}
-              sx={{ width: 450 }}
+              sx={{ width: 480 }}
             />
             <Typography variant="body2" color="text.secondary">
               Showing {filteredTransactions.length} Verified Ledger Events
@@ -157,7 +157,7 @@ export default function BlockchainExplorer() {
                     <TableRow>
                       <TableCell sx={{ fontWeight: 700 }}>Tx Hash</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Event Type</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>IPFS CID</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>SHA-256 Checksum</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Patient Pseudonym (PID)</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Requester PID</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Permission Status</TableCell>
@@ -176,9 +176,11 @@ export default function BlockchainExplorer() {
                         </TableCell>
                         <TableCell>{getEventChip(tx.event)}</TableCell>
                         <TableCell>
-                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                            {tx.ipfsCid ? `${tx.ipfsCid.substring(0, 12)}...` : 'Qm...'}
-                          </Typography>
+                          <Tooltip title={tx.recordHash || tx.sha256Hash || '—'}>
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                              {(tx.recordHash || tx.sha256Hash) && (tx.recordHash || tx.sha256Hash) !== '—' ? `${(tx.recordHash || tx.sha256Hash).substring(0, 12)}...` : '—'}
+                            </Typography>
+                          </Tooltip>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'text.secondary' }}>

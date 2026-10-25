@@ -1,0 +1,65 @@
+{
+  "model_name": "MedChain Sentinel AI Anomaly Detector",
+  "features": [
+    {
+      "name": "hour_of_day",
+      "type": "float",
+      "description": "Hour of access (0-23)",
+      "min": 0,
+      "max": 23
+    },
+    {
+      "name": "day_of_week",
+      "type": "float",
+      "description": "Day of week (0=Mon, 6=Sun)",
+      "min": 0,
+      "max": 6
+    },
+    {
+      "name": "records_per_hour",
+      "type": "float",
+      "description": "Records requested in last hour",
+      "min": 0,
+      "max": 500
+    },
+    {
+      "name": "time_since_last",
+      "type": "float",
+      "description": "Seconds since last access",
+      "min": 0,
+      "max": 86400
+    },
+    {
+      "name": "specialty_match",
+      "type": "float",
+      "description": "Doctor specialty matches record domain (1.0=Yes, 0.0=No)",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "hospital_match",
+      "type": "float",
+      "description": "Doctor and patient belong to same hospital (1.0=Yes, 0.0=No)",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "name": "access_freq_7d",
+      "type": "float",
+      "description": "Total accesses in past 7 days",
+      "min": 0,
+      "max": 1000
+    },
+    {
+      "name": "unique_patients_1h",
+      "type": "float",
+      "description": "Distinct patient records accessed in past hour",
+      "min": 0,
+      "max": 100
+    }
+  ],
+  "datasets": [
+    "CICIDS2017 (Network Anomaly Baseline)",
+    "MedChain Application Telemetry (Access Anomaly Baseline)"
+  ]
+}

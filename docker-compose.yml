@@ -2,71 +2,51 @@ version: '3.8'
 
 services:
 
-  # ─── MongoDB ────────────────────────────────────────────────────────────────
-  mongodb:
-    image: mongo:7.0
-    container_name: medchain-mongodb
+  # ─── PostgreSQL Database (Production Persistence) ───────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: medchain-postgres
     restart: unless-stopped
     ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
+      - "5432:5432"
     environment:
-      MONGO_INITDB_DATABASE: medchain
+      POSTGRES_DB: ${POSTGRES_DB:-medchaindb}
+      POSTGRES_USER: ${POSTGRES_USER:-medchain}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medchain_prod_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - medchain-net
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medchain} -d ${POSTGRES_DB:-medchaindb}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ─── IPFS (Kubo) ────────────────────────────────────────────────────────────
-  ipfs:
-    image: ipfs/kubo:latest
-    container_name: medchain-ipfs
-    restart: unless-stopped
-    ports:
-      - "4001:4001"   # Swarm
-      - "5001:5001"   # API
-      - "8081:8080"   # Gateway (use 8081 to avoid conflict with Hardhat)
-    volumes:
-      - ipfs_data:/data/ipfs
-    environment:
-      IPFS_PROFILE: server
-    networks:
-      - medchain-net
-    healthcheck:
-      test: ["CMD", "ipfs", "id"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-
-  # ─── Hardhat Ethereum Node ───────────────────────────────────────────────────
-  hardhat:
+  # ─── Hardhat Local EVM Test Network ─────────────────────────────────────────
+  # NOTE: Local EVM Test Network for smart contract transaction verification.
+  blockchain:
     build:
       context: ./blockchain
       dockerfile: Dockerfile
-    container_name: medchain-hardhat
+    container_name: medchain-blockchain
     restart: unless-stopped
     ports:
       - "8545:8545"
     networks:
       - medchain-net
     healthcheck:
-      test: ["CMD", "curl", "-s", "-X", "POST", "--data",
-             "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}",
-             "-H", "Content-Type: application/json", "http://localhost:8545"]
+      test: ["CMD", "nc", "-z", "localhost", "8545"]
       interval: 10s
       timeout: 5s
       retries: 10
 
-  # ─── ML Anomaly Detection ────────────────────────────────────────────────────
-  ml-service:
+  # ─── FastAPI Sentinel AI Anomaly Microservice ───────────────────────────────
+  sentinel-ml:
     build:
       context: ./ml
       dockerfile: Dockerfile
-    container_name: medchain-ml
+    container_name: medchain-sentinel-ml
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -78,7 +58,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Spring Boot Backend ─────────────────────────────────────────────────────
+  # ─── Spring Boot Core Backend Service ───────────────────────────────────────
   backend:
     build:
       context: ./backend
@@ -88,20 +68,27 @@ services:
     ports:
       - "8080:8080"
     environment:
-      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/medchain
-      ML_SERVICE_URL: http://ml-service:8000
-      JWT_SECRET: medchain_super_secret_key_2025_blockchain_secure_minimum_256_bits
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-medchaindb}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-medchain}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-medchain_prod_password}
+      JWT_SECRET: ${JWT_SECRET:-medchain_production_super_secret_jwt_key_minimum_256_bits_length}
       JWT_EXPIRATION: 86400000
-      CORS_ALLOWED_ORIGINS: http://localhost:3000
+      AES_SECRET_KEY: ${AES_SECRET_KEY:-MedChainProductionSecretKey2026AES256GCM}
+      ML_SERVICE_URL: http://sentinel-ml:8000
       BLOCKCHAIN_ENABLED: "true"
-      BLOCKCHAIN_RPC_URL: http://hardhat:8545
-      BLOCKCHAIN_PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-      IPFS_API_URL: http://ipfs:5001
-      IPFS_GATEWAY_URL: http://ipfs:8080
+      BLOCKCHAIN_RPC_URL: http://blockchain:8545
+      BLOCKCHAIN_PRIVATE_KEY: ${BLOCKCHAIN_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:80
+      FILE_STORAGE_LOCATION: /app/uploads
+    volumes:
+      - medical_file_storage:/app/uploads
     depends_on:
-      mongodb:
+      postgres:
         condition: service_healthy
-      ml-service:
+      sentinel-ml:
+        condition: service_healthy
+      blockchain:
         condition: service_healthy
     networks:
       - medchain-net
@@ -111,7 +98,7 @@ services:
       timeout: 5s
       retries: 10
 
-  # ─── React Frontend ───────────────────────────────────────────────────────────
+  # ─── React + Nginx Reverse Proxy Frontend ───────────────────────────────────
   frontend:
     build:
       context: ./frontend
@@ -129,8 +116,8 @@ services:
       - medchain-net
 
 volumes:
-  mongo_data:
-  ipfs_data:
+  postgres_data:
+  medical_file_storage:
 
 networks:
   medchain-net:

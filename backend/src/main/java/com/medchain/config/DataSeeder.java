@@ -60,81 +60,81 @@ public class DataSeeder implements CommandLineRunner {
 
 
         // Users
-        User alice  = createUser("Alice Johnson",    "patient@medchain.com",  "patient123", "PATIENT", "+1-555-0101", Map.of());
-        User bob    = createUser("Bob Williams",     "bob@medchain.com",      "patient123", "PATIENT", "+1-555-0105", Map.of());
-        User admin  = createUser("Admin User",       "admin@medchain.com",    "admin123",   "ADMIN",   "+1-555-0103", Map.of());
+        User alice  = createUser("Alice Johnson",    "patient@medchain.com",  "Password123!", "PATIENT", "+1-555-0101", Map.of());
+        User bob    = createUser("Bob Williams",     "bob@medchain.com",      "Password123!", "PATIENT", "+1-555-0105", Map.of());
+        User admin  = createUser("Admin User",       "admin@medchain.com",    "Password123!", "ADMIN",   "+1-555-0103", Map.of());
 
         // Doctors — 8 specializations
-        User robert  = createUser("Dr. Robert Smith",   "doctor@medchain.com",    "doctor123", "DOCTOR", "+1-555-0102",
+        User robert  = createUser("Dr. Robert Smith",   "doctor@medchain.com",    "Password123!", "DOCTOR", "+1-555-0102",
                 Map.of("specialty", "Cardiology",    "hospital", "CityHospital",    "license", "Senior",   "department", "Cardiology"));
-        User emily   = createUser("Dr. Emily Chen",     "emily@medchain.com",     "doctor123", "DOCTOR", "+1-555-0104",
+        User emily   = createUser("Dr. Emily Chen",     "emily@medchain.com",     "Password123!", "DOCTOR", "+1-555-0104",
                 Map.of("specialty", "Radiology",     "hospital", "CityHospital",    "license", "Senior",   "department", "Radiology"));
-        User james   = createUser("Dr. James Wilson",   "james@medchain.com",     "doctor123", "DOCTOR", "+1-555-0106",
+        User james   = createUser("Dr. James Wilson",   "james@medchain.com",     "Password123!", "DOCTOR", "+1-555-0106",
                 Map.of("specialty", "Neurology",     "hospital", "CityHospital",    "license", "Senior",   "department", "Neurology"));
-        User sarah   = createUser("Dr. Sarah Patel",    "sarah@medchain.com",     "doctor123", "DOCTOR", "+1-555-0107",
+        User sarah   = createUser("Dr. Sarah Patel",    "sarah@medchain.com",     "Password123!", "DOCTOR", "+1-555-0107",
                 Map.of("specialty", "Orthopedics",   "hospital", "MedicalCenter",   "license", "Junior",   "department", "Orthopedics"));
-        User michael = createUser("Dr. Michael Torres", "michael@medchain.com",   "doctor123", "DOCTOR", "+1-555-0108",
+        User michael = createUser("Dr. Michael Torres", "michael@medchain.com",   "Password123!", "DOCTOR", "+1-555-0108",
                 Map.of("specialty", "Oncology",      "hospital", "CancerInstitute", "license", "Senior",   "department", "Oncology"));
-        User priya   = createUser("Dr. Priya Sharma",   "priya@medchain.com",     "doctor123", "DOCTOR", "+1-555-0109",
+        User priya   = createUser("Dr. Priya Sharma",   "priya@medchain.com",     "Password123!", "DOCTOR", "+1-555-0109",
                 Map.of("specialty", "Pediatrics",    "hospital", "CityHospital",    "license", "Junior",   "department", "Pediatrics"));
-        User david   = createUser("Dr. David Kim",      "david@medchain.com",     "doctor123", "DOCTOR", "+1-555-0110",
+        User david   = createUser("Dr. David Kim",      "david@medchain.com",     "Password123!", "DOCTOR", "+1-555-0110",
                 Map.of("specialty", "Dermatology",   "hospital", "SkinClinic",      "license", "Junior",   "department", "Dermatology"));
-        User lisa    = createUser("Dr. Lisa Nguyen",    "lisa@medchain.com",      "doctor123", "DOCTOR", "+1-555-0111",
+        User lisa    = createUser("Dr. Lisa Nguyen",    "lisa@medchain.com",      "Password123!", "DOCTOR", "+1-555-0111",
                 Map.of("specialty", "Psychiatry",    "hospital", "MindWellness",    "license", "Senior",   "department", "Psychiatry"));
 
         // Alice's records
         MedicalRecord r1 = createRecord(alice, "Blood Test Results", "Complete blood count and metabolic panel",
-                "LAB_REPORT", "QmX7b3Na9f2...", "(specialty=Cardiology AND hospital=CityHospital) OR (license=Senior)",
+                "LAB_REPORT", "(specialty=Cardiology AND hospital=CityHospital) OR (license=Senior)",
                 List.of(robert.getId()), List.of(robert.getPseudonymId()), "2025-01-10");
         MedicalRecord r2 = createRecord(alice, "Chest X-Ray", "Annual chest radiograph — no abnormalities",
-                "SCAN", "QmY8c4Nb0e3...", "(specialty=Radiology AND hospital=CityHospital)",
+                "SCAN", "(specialty=Radiology AND hospital=CityHospital)",
                 List.of(emily.getId()), List.of(emily.getPseudonymId()), "2025-01-15");
         MedicalRecord r3 = createRecord(alice, "Cardiology Prescription", "Atorvastatin 20mg daily for 3 months",
-                "PRESCRIPTION", "QmZ9d5Nc1f4...", "(specialty=Cardiology) OR (license=Senior AND hospital=CityHospital)",
+                "PRESCRIPTION", "(specialty=Cardiology) OR (license=Senior AND hospital=CityHospital)",
                 List.of(robert.getId(), emily.getId()), List.of(robert.getPseudonymId(), emily.getPseudonymId()), "2025-01-20");
         MedicalRecord r4 = createRecord(alice, "Hospital Discharge Summary", "Post-operative care instructions",
-                "DISCHARGE", "QmA0e6Nd2g5...", "(license=Senior AND hospital=CityHospital)",
+                "DISCHARGE", "(license=Senior AND hospital=CityHospital)",
                 List.of(robert.getId()), List.of(robert.getPseudonymId()), "2025-01-25");
         MedicalRecord r8 = createRecord(alice, "Neurology Consultation", "Migraine evaluation and treatment plan",
-                "LAB_REPORT", "QmE4i0Rf6k9...", "(specialty=Neurology AND hospital=CityHospital)",
+                "LAB_REPORT", "(specialty=Neurology AND hospital=CityHospital)",
                 List.of(james.getId()), List.of(james.getPseudonymId()), "2025-03-05");
         MedicalRecord r10 = createRecord(alice, "MRI Brain Scan", "MRI without contrast — no acute intracranial abnormality",
-                "SCAN", "QmG6k2Th8m1...", "(specialty=Neurology OR specialty=Radiology) AND hospital=CityHospital",
+                "SCAN", "(specialty=Neurology OR specialty=Radiology) AND hospital=CityHospital",
                 List.of(james.getId(), emily.getId()), List.of(james.getPseudonymId(), emily.getPseudonymId()), "2025-03-10");
         MedicalRecord r11 = createRecord(alice, "Thyroid Function Test", "TSH, T3, T4 levels — subclinical hypothyroidism",
-                "LAB_REPORT", "QmH7l3Ui9n2...", "(specialty=Cardiology OR license=Senior)",
+                "LAB_REPORT", "(specialty=Cardiology OR license=Senior)",
                 List.of(robert.getId()), List.of(robert.getPseudonymId()), "2025-04-01");
         MedicalRecord r12 = createRecord(alice, "Dermatology Report", "Eczema assessment — mild atopic dermatitis",
-                "DISCHARGE", "QmI8m4Vj0o3...", "(specialty=Dermatology)",
+                "DISCHARGE", "(specialty=Dermatology)",
                 List.of(david.getId()), List.of(david.getPseudonymId()), "2025-04-15");
         MedicalRecord r13 = createRecord(alice, "Psychiatry Evaluation", "Anxiety disorder assessment — GAD-7 score 12",
-                "LAB_REPORT", "QmJ9n5Wk1p4...", "(specialty=Psychiatry AND license=Senior)",
+                "LAB_REPORT", "(specialty=Psychiatry AND license=Senior)",
                 List.of(lisa.getId()), List.of(lisa.getPseudonymId()), "2025-05-02");
 
         // Bob's records
         MedicalRecord r5 = createRecord(bob, "Lipid Panel Results", "Cholesterol and triglyceride levels — borderline high LDL",
-                "LAB_REPORT", "QmB1f7Oe3h6...", "(specialty=Cardiology AND hospital=CityHospital)",
+                "LAB_REPORT", "(specialty=Cardiology AND hospital=CityHospital)",
                 List.of(robert.getId()), List.of(robert.getPseudonymId()), "2025-02-03");
         MedicalRecord r6 = createRecord(bob, "Echocardiogram Report", "Mild mitral valve regurgitation detected",
-                "SCAN", "QmC2g8Pf4i7...", "(specialty=Cardiology OR specialty=Radiology) AND hospital=CityHospital",
+                "SCAN", "(specialty=Cardiology OR specialty=Radiology) AND hospital=CityHospital",
                 List.of(robert.getId(), emily.getId()), List.of(robert.getPseudonymId(), emily.getPseudonymId()), "2025-02-10");
         MedicalRecord r7 = createRecord(bob, "Beta Blocker Prescription", "Metoprolol 50mg twice daily — cardiac management",
-                "PRESCRIPTION", "QmD3h9Qg5j8...", "(specialty=Cardiology AND license=Senior)",
+                "PRESCRIPTION", "(specialty=Cardiology AND license=Senior)",
                 List.of(), List.of(), "2025-02-15");
         MedicalRecord r9 = createRecord(bob, "Orthopedic X-Ray", "Right knee — mild osteoarthritis grade II",
-                "SCAN", "QmF5j1Sg7l0...", "(specialty=Orthopedics OR specialty=Radiology)",
+                "SCAN", "(specialty=Orthopedics OR specialty=Radiology)",
                 List.of(sarah.getId(), emily.getId()), List.of(sarah.getPseudonymId(), emily.getPseudonymId()), "2025-03-12");
         MedicalRecord r14 = createRecord(bob, "Oncology Screening", "PSA test and colonoscopy — no malignancy detected",
-                "LAB_REPORT", "QmK0o6Xl2q5...", "(specialty=Oncology AND license=Senior)",
+                "LAB_REPORT", "(specialty=Oncology AND license=Senior)",
                 List.of(michael.getId()), List.of(michael.getPseudonymId()), "2025-03-20");
         MedicalRecord r15 = createRecord(bob, "Physiotherapy Discharge", "Post-knee surgery rehab — full ROM achieved",
-                "DISCHARGE", "QmL1p7Ym3r6...", "(specialty=Orthopedics OR license=Senior)",
+                "DISCHARGE", "(specialty=Orthopedics OR license=Senior)",
                 List.of(sarah.getId()), List.of(sarah.getPseudonymId()), "2025-04-10");
         MedicalRecord r16 = createRecord(bob, "Pediatric Vaccination Record", "Annual flu vaccine + Hepatitis B booster",
-                "PRESCRIPTION", "QmM2q8Zn4s7...", "(specialty=Pediatrics OR specialty=Cardiology)",
+                "PRESCRIPTION", "(specialty=Pediatrics OR specialty=Cardiology)",
                 List.of(priya.getId(), robert.getId()), List.of(priya.getPseudonymId(), robert.getPseudonymId()), "2025-04-22");
         MedicalRecord r17 = createRecord(bob, "Psychiatric Follow-up", "Depression screening — PHQ-9 score 8, mild depression",
-                "LAB_REPORT", "QmN3r9Ao5t8...", "(specialty=Psychiatry AND license=Senior)",
+                "LAB_REPORT", "(specialty=Psychiatry AND license=Senior)",
                 List.of(lisa.getId()), List.of(lisa.getPseudonymId()), "2025-05-10");
 
         // Access logs
@@ -172,6 +172,7 @@ public class DataSeeder implements CommandLineRunner {
         u.setPseudonymId(pseudonymService.generatePseudonym(email, nonce));
         u.setPseudonymNonce(nonce);
         u.setAttributes(attrs);
+        u.setEmailVerified(true);
         User saved = userRepository.save(u);
         // Register pseudonym on blockchain
         blockchainService.registerPseudonym(saved.getPseudonymId(), saved.getRole());
@@ -179,13 +180,20 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private MedicalRecord createRecord(User patient, String title, String desc, String type,
-                                        String cid, String policy, List<String> doctorIds,
+                                        String policy, List<String> doctorIds,
                                         List<String> doctorPIDs, String date) {
         MedicalRecord r = new MedicalRecord();
         r.setPatientId(patient.getId());
         r.setPatientPID(patient.getPseudonymId());
         r.setTitle(title); r.setDescription(desc);
-        r.setRecordType(type); r.setIpfsCid(cid);
+        r.setFileName(title.toLowerCase().replaceAll("[^a-z0-9]", "_") + ".pdf");
+        r.setFileSize("1.5 MB");
+        r.setFileMimeType("application/pdf");
+        r.setRecordType(type);
+
+        String sha256Hash = org.web3j.crypto.Hash.sha3String(title + date).substring(2, 66);
+        r.setSha256Hash(sha256Hash);
+        r.setIpfsCid(null);
         r.setAccessPolicy(policy);
         r.setPolicyHash("0x" + Integer.toHexString(policy.hashCode()));
         r.setBlockchainRecordId("0x" + Long.toHexString(System.nanoTime()));
@@ -196,7 +204,7 @@ public class DataSeeder implements CommandLineRunner {
         MedicalRecord saved = recordRepository.save(r);
         // Anchor on blockchain
         String tx = blockchainService.uploadRecord(
-            saved.getId(), cid, saved.getPolicyHash(), patient.getPseudonymId());
+            saved.getId(), sha256Hash, saved.getPolicyHash(), patient.getPseudonymId());
         saved.setBlockchainTxHash(tx);
         saved.setBlockchainRecordId("0x" + org.web3j.crypto.Hash.sha3String(saved.getId()).substring(2, 18));
         return recordRepository.save(saved);

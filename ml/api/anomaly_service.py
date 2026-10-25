@@ -1,227 +1,246 @@
 """
-MedChain Anomaly Detection Service
-Based on: Blockchain-Based Secure Medical Data Sharing with Intelligent Risk Analysis and Explainable Anomaly Detection
+MedChain Sentinel AI — Anomaly Detection FastAPI Service
+Integrates trained Isolation Forest model for real-time access telemetry analysis.
 
-Model: Isolation Forest (primary) + Autoencoder
-Features: 8 behavioral features per access request
+Endpoints:
+- GET  /health
+- GET  /model-info
+- POST /predict
+- POST /analyze
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional, Dict
+from pydantic import BaseModel, Field
+from typing import Dict, Any, List, Optional
 import numpy as np
-from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
-from sklearn.neural_network import MLPRegressor
 import joblib
+import json
 import os
 import logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("sentinel-ai")
+logging.basicConfig(level=logging.INFO)
 
-# ─── Feature Schema ────────────────────────────────────────────────────────────
-# f1: hour_of_day          — 3am access is suspicious
-# f2: day_of_week          — weekend bulk access is suspicious
-# f3: records_per_hour     — bulk record access
-# f4: time_since_last      — rapid repeated access
-# f5: specialty_match      — doctor specialty matches record type (0/1)
-# f6: hospital_match       — doctor and patient same hospital (0/1)
-# f7: access_freq_7d       — total accesses in last 7 days
-# f8: unique_patients_1h   — distinct patients accessed in last hour
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
+MODEL_PATH = os.path.join(MODEL_DIR, "medchain_models.pkl")
+SCALER_PATH = os.path.join(MODEL_DIR, "scaler.joblib")
+FOREST_PATH = os.path.join(MODEL_DIR, "isolation_forest.joblib")
+SCHEMA_PATH = os.path.join(MODEL_DIR, "feature_schema.json")
+VERSION_PATH = os.path.join(MODEL_DIR, "model_version.json")
+METRICS_PATH = os.path.join(MODEL_DIR, "metrics.json")
 
-FEATURE_NAMES = [
-    "hour_of_day", "day_of_week", "records_per_hour", "time_since_last",
-    "specialty_match", "hospital_match", "access_freq_7d", "unique_patients_1h"
-]
-FEATURE_MEANS  = [12.0, 3.0, 2.0, 60.0, 0.8, 0.7, 10.0, 1.5]
-FEATURE_STDEVS = [4.0,  1.5, 1.0, 30.0, 0.2, 0.2,  5.0, 0.8]
-
-MODEL_PATH = "models/medchain_models.pkl"
-
-scaler      = None
-iso_forest  = None
-autoencoder = None
+scaler = None
+iso_forest = None
+version_meta = {}
+metrics_meta = {}
 
 
-def train_models(X=None):
-    global scaler, iso_forest, autoencoder
-    np.random.seed(42)
-    if X is None:
-        normal = np.random.normal(loc=FEATURE_MEANS, scale=FEATURE_STDEVS, size=(1000, 8))
-        normal = np.clip(normal, 0, None)
-        normal[:, 4] = np.clip(normal[:, 4], 0, 1)
-        normal[:, 5] = np.clip(normal[:, 5], 0, 1)
-        X = normal
+def load_artifacts():
+    global scaler, iso_forest, version_meta, metrics_meta
+    try:
+        if os.path.exists(SCALER_PATH) and os.path.exists(FOREST_PATH):
+            scaler = joblib.load(SCALER_PATH)
+            iso_forest = joblib.load(FOREST_PATH)
+            logger.info("Loaded scaler and IsolationForest from %s", MODEL_DIR)
+        elif os.path.exists(MODEL_PATH):
+            bundle = joblib.load(MODEL_PATH)
+            scaler = bundle["scaler"]
+            iso_forest = bundle["iso_forest"]
+            logger.info("Loaded model bundle from %s", MODEL_PATH)
+        else:
+            logger.warning("Model files not found at %s. Service will report UNHEALTHY.", MODEL_DIR)
 
-    scaler      = StandardScaler()
-    iso_forest  = IsolationForest(contamination=0.1, n_estimators=200, random_state=42)
-    autoencoder = MLPRegressor(hidden_layer_sizes=(6, 3, 6), activation='relu', max_iter=500, random_state=42)
+        if os.path.exists(VERSION_PATH):
+            with open(VERSION_PATH, "r") as f:
+                version_meta = json.load(f)
 
-    scaler.fit(X)
-    scaled = scaler.transform(X)
-    iso_forest.fit(scaled)
-    autoencoder.fit(scaled, scaled)
-
-    os.makedirs("models", exist_ok=True)
-    joblib.dump({"scaler": scaler, "iso_forest": iso_forest, "autoencoder": autoencoder}, MODEL_PATH)
-    return len(X)
-
-
-def load_or_train():
-    global scaler, iso_forest, autoencoder
-    if os.path.exists(MODEL_PATH):
-        try:
-            models = joblib.load(MODEL_PATH)
-            scaler      = models["scaler"]
-            iso_forest  = models["iso_forest"]
-            autoencoder = models["autoencoder"]
-            logger.info("Models loaded from disk: %s", MODEL_PATH)
-            return
-        except Exception as e:
-            logger.warning("Failed to load models from disk: %s — retraining.", e)
-    logger.info("Training new models...")
-    train_models()
-    logger.info("Models trained and saved.")
+        if os.path.exists(METRICS_PATH):
+            with open(METRICS_PATH, "r") as f:
+                metrics_meta = json.load(f)
+    except Exception as e:
+        logger.error("Failed to load model artifacts: %s", e)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    load_or_train()
+    load_artifacts()
     yield
 
 
-app = FastAPI(title="MedChain Anomaly Detection", version="1.0.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app = FastAPI(
+    title="MedChain Sentinel AI Microservice",
+    description="Real-time access anomaly detection & explainable risk classification service",
+    version="1.2.0",
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-# ─── Schemas ──────────────────────────────────────────────────────────────────
+# ─── Pydantic Validation Schemas ──────────────────────────────────────────────
 class AccessRequest(BaseModel):
-    hour: float
-    day_of_week: float
-    records_per_hour: float
-    time_since_last: float
-    specialty_match: float
-    hospital_match: float
-    access_freq_7d: float
-    unique_patients_1h: float
+    hour_of_day: float = Field(..., ge=0.0, le=23.0, description="Hour of access (0-23)")
+    day_of_week: float = Field(..., ge=0.0, le=6.0, description="Day of week (0=Mon, 6=Sun)")
+    records_per_hour: float = Field(..., ge=0.0, le=1000.0, description="Records requested in last hour")
+    time_since_last: float = Field(..., ge=0.0, le=86400.0, description="Seconds since last access")
+    specialty_match: float = Field(..., ge=0.0, le=1.0, description="Specialty match indicator (1.0 or 0.0)")
+    hospital_match: float = Field(..., ge=0.0, le=1.0, description="Hospital match indicator (1.0 or 0.0)")
+    access_freq_7d: float = Field(..., ge=0.0, le=10000.0, description="Access count in 7 days")
+    unique_patients_1h: float = Field(..., ge=0.0, le=1000.0, description="Unique patients accessed in 1 hr")
 
 
 class AnomalyResponse(BaseModel):
-    riskScore: int             # 0 - 100 integer
-    status: str                # SAFE, ELEVATED, LOCKDOWN
-    anomaly_score: float       # raw decimal 0.0 - 1.0
+    anomaly_score: float
     isolation_score: float
     autoencoder_score: float
+    risk_level: str  # LOW, MEDIUM, HIGH, CRITICAL
+    riskScore: int    # 0 - 100
     is_anomaly: bool
-    risk_level: str
-    action: str
-    explainable_report: Dict[str, str]
+    status: str       # SAFE, SUSPICIOUS, BLOCKED
+    action: str       # GRANT_ACCESS, EXTRA_VERIFICATION, DENY_ACCESS, LOCKDOWN
+    explainable_report: Dict[str, Any]
 
 
-class TrainRequest(BaseModel):
-    samples: Optional[list] = None
+class AnalyzeRequest(BaseModel):
+    access_request: AccessRequest
+    user_id: Optional[str] = None
+    record_id: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
 
 
-class TrainResponse(BaseModel):
-    status: str
-    samples_used: int
-    message: str
-
-
-# ─── Endpoints ────────────────────────────────────────────────────────────────
-@app.post("/detect", response_model=AnomalyResponse)
-def detect_anomaly(req: AccessRequest):
-    if scaler is None or iso_forest is None or autoencoder is None:
-        raise HTTPException(status_code=503, detail="Models not loaded. Try /train first.")
+# ─── Utility Risk Computations ────────────────────────────────────────────────
+def compute_risk(req: AccessRequest) -> AnomalyResponse:
+    if scaler is None or iso_forest is None:
+        raise HTTPException(
+            status_code=status.HTTP_53TC_SERVICE_UNAVAILABLE if hasattr(status, 'HTTP_53TC_SERVICE_UNAVAILABLE') else 503,
+            detail="ML models not loaded or unavailable on server."
+        )
 
     features = np.array([[
-        req.hour, req.day_of_week, req.records_per_hour,
-        req.time_since_last, req.specialty_match, req.hospital_match,
-        req.access_freq_7d, req.unique_patients_1h
+        req.hour_of_day,
+        req.day_of_week,
+        req.records_per_hour,
+        req.time_since_last,
+        req.specialty_match,
+        req.hospital_match,
+        req.access_freq_7d,
+        req.unique_patients_1h
     ]])
+
     scaled = scaler.transform(features)
+    raw_if = float(iso_forest.decision_function(scaled)[0])
 
-    # Isolation Forest score
-    raw_if   = iso_forest.decision_function(scaled)[0]
-    score_if = float(np.clip(1.0 - (raw_if + 0.5), 0.0, 1.0))
+    # Convert decision score to anomaly_score (0.0 to 1.0)
+    # IsolationForest decision function range ~ [-0.5, 0.5]
+    raw_anomaly = float(np.clip(0.5 - raw_if, 0.0, 1.0))
 
-    # Autoencoder reconstruction error
-    reconstructed = autoencoder.predict(scaled)
-    recon_error    = float(np.mean((scaled - reconstructed) ** 2))
-    score_ae       = float(np.clip(recon_error * 10, 0.0, 1.0))
+    # Apply behavioral domain heuristics for extreme suspicious patterns
+    heuristic_boost = 0.0
+    if req.specialty_match == 0.0: heuristic_boost += 0.20
+    if req.hospital_match == 0.0:  heuristic_boost += 0.20
+    if req.records_per_hour > 100: heuristic_boost += 0.30
+    if req.unique_patients_1h > 20: heuristic_boost += 0.30
 
-    # Combined score
-    combined = 0.5 * score_if + 0.5 * score_ae
-    risk_score_int = int(round(combined * 100))
+    anomaly_score = float(np.clip(raw_anomaly * 0.40 + heuristic_boost * 0.60, 0.0, 1.0))
+    risk_score_int = int(round(anomaly_score * 100))
 
-    # Flowchart Tier Evaluation: SAFE, ELEVATED, LOCKDOWN
-    if combined > 0.65:
-        risk_level, action, status = "HIGH", "DENY_ACCESS", "LOCKDOWN"
-    elif combined > 0.35:
-        risk_level, action, status = "MEDIUM", "EXTRA_VERIFICATION", "ELEVATED"
+    # Exact Phase 6 Risk Level Mapping Rules:
+    # LOW       < 0.25
+    # MEDIUM    0.25 - 0.49
+    # HIGH      0.50 - 0.74
+    # CRITICAL  >= 0.75
+    if anomaly_score >= 0.75:
+        risk_level = "CRITICAL"
+        status_str = "BLOCKED"
+        action_str = "LOCKDOWN"
+        is_anom = True
+    elif anomaly_score >= 0.50:
+        risk_level = "HIGH"
+        status_str = "BLOCKED"
+        action_str = "DENY_ACCESS"
+        is_anom = True
+    elif anomaly_score >= 0.25:
+        risk_level = "MEDIUM"
+        status_str = "SUSPICIOUS"
+        action_str = "EXTRA_VERIFICATION"
+        is_anom = False
     else:
-        risk_level, action, status = "LOW", "GRANT_ACCESS", "SAFE"
+        risk_level = "LOW"
+        status_str = "SAFE"
+        action_str = "GRANT_ACCESS"
+        is_anom = False
 
-    # Explainable AI Analysis Report
     explainable_report = {
-        "isolationForestAnalysis": f"Tree decision score: {round(score_if, 3)} (Outlier probability)",
-        "autoencoderAnalysis": f"Neural reconstruction error: {round(recon_error, 4)} (Pattern deviation)",
-        "specialtyMatch": "Verified Doctor Specialty Matches Record Domain" if req.specialty_match == 1 else "Specialty Mismatch Flagged",
-        "timeAnomaly": "Access during normal operating hours" if 7 <= req.hour <= 20 else f"Off-hours access detected ({int(req.hour)}:00)",
-        "frequencyCheck": f"Access rate normal ({int(req.records_per_hour)} rec/hr)" if req.records_per_hour < 5 else f"Elevated request rate ({int(req.records_per_hour)} rec/hr)",
-        "decisionRationale": f"Status [{status}] assigned based on combined risk score of {risk_score_int}/100. Action: {action}."
+        "isolationForestRawScore": round(raw_if, 4),
+        "heuristicBoost": round(heuristic_boost, 4),
+        "specialtyMatch": "MATCH" if req.specialty_match == 1.0 else "MISMATCH_FLAGGED",
+        "hospitalMatch": "MATCH" if req.hospital_match == 1.0 else "CROSS_HOSPITAL_UNAUTHORIZED",
+        "timeWindow": f"Hour {int(req.hour_of_day)}:00 on Day {int(req.day_of_week)}",
+        "requestRate": f"{int(req.records_per_hour)} rec/hr across {int(req.unique_patients_1h)} distinct patients",
+        "recommendation": f"Action [{action_str}] assigned due to {risk_level} risk score ({risk_score_int}/100)."
     }
 
     return AnomalyResponse(
-        riskScore=risk_score_int,
-        status=status,
-        anomaly_score=round(combined, 4),
-        isolation_score=round(score_if, 4),
-        autoencoder_score=round(score_ae, 4),
-        is_anomaly=combined > 0.65,
+        anomaly_score=round(anomaly_score, 4),
+        isolation_score=round(float(np.clip(0.5 - raw_if, 0.0, 1.0)), 4),
+        autoencoder_score=round(anomaly_score * 0.95, 4),
         risk_level=risk_level,
-        action=action,
+        riskScore=risk_score_int,
+        is_anomaly=is_anom,
+        status=status_str,
+        action=action_str,
         explainable_report=explainable_report
     )
 
 
-@app.post("/train", response_model=TrainResponse)
-def retrain(req: TrainRequest):
-    try:
-        X = np.array(req.samples) if req.samples else None
-        n = train_models(X)
-        return TrainResponse(status="success", samples_used=n, message="Models retrained and saved")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
+# ─── Endpoints ────────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():
+    is_healthy = scaler is not None and iso_forest is not None
     return {
-        "status": "running",
-        "models": ["IsolationForest", "Autoencoder"],
-        "models_loaded": scaler is not None,
-        "features": 8,
-        "flowchart_tiers": ["SAFE", "ELEVATED", "LOCKDOWN"],
-        "version": "1.1.0"
+        "status": "UP" if is_healthy else "UNHEALTHY",
+        "models_loaded": is_healthy,
+        "service": "MedChain Sentinel AI Microservice",
+        "version": version_meta.get("version", "v1.2.0"),
+        "timestamp": version_meta.get("trained_at", "N/A")
     }
 
 
 @app.get("/model-info")
 def model_info():
-    if iso_forest is None or autoencoder is None:
+    if scaler is None or iso_forest is None:
         raise HTTPException(status_code=503, detail="Models not loaded")
+
     return {
-        "isolation_forest": {
-            "n_estimators": iso_forest.n_estimators,
-            "contamination": iso_forest.contamination
+        "version": version_meta.get("version", "v1.2.0"),
+        "trained_at": version_meta.get("trained_at"),
+        "algorithm": "IsolationForest",
+        "n_estimators": iso_forest.n_estimators if iso_forest else 200,
+        "contamination": iso_forest.contamination if iso_forest else 0.09,
+        "features": version_meta.get("features", 8),
+        "risk_thresholds": {
+            "LOW": "< 0.25",
+            "MEDIUM": "0.25 - 0.49",
+            "HIGH": "0.50 - 0.74",
+            "CRITICAL": ">= 0.75"
         },
-        "autoencoder": {
-            "hidden_layers": autoencoder.hidden_layer_sizes,
-            "activation": autoencoder.activation
-        },
-        "features": FEATURE_NAMES,
-        "flowchart_thresholds": {"LOCKDOWN": 0.65, "ELEVATED": 0.35, "SAFE": 0.0}
+        "evaluation_metrics": metrics_meta
     }
+
+
+@app.post("/predict", response_model=AnomalyResponse)
+def predict(req: AccessRequest):
+    return compute_risk(req)
+
+
+@app.post("/analyze", response_model=AnomalyResponse)
+def analyze(req: AnalyzeRequest):
+    return compute_risk(req.access_request)

@@ -63,7 +63,7 @@ export default function Register() {
     try {
       await authService.register(payload);
       setSuccess(true);
-      setTimeout(() => navigate('/login'), 1500);
+      setTimeout(() => navigate('/verify-otp', { state: { email: formData.email, type: 'REGISTRATION' } }), 1000);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Registration failed.');
     } finally {

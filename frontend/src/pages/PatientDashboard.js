@@ -69,7 +69,7 @@ export default function PatientDashboard() {
     title: '',
     description: '',
     recordType: 'LAB_REPORT',
-    accessPolicy: 'specialty:CARDIOLOGY',
+    accessPolicy: '(specialty=Cardiology AND hospital=CityHospital) OR (license=Senior)',
     content: '',
     fileName: '',
     fileSize: '',
@@ -147,7 +147,7 @@ export default function PatientDashboard() {
         title: '',
         description: '',
         recordType: 'LAB_REPORT',
-        accessPolicy: 'specialty:CARDIOLOGY',
+        accessPolicy: '(specialty=Cardiology AND hospital=CityHospital) OR (license=Senior)',
         content: '',
         fileName: '',
         fileSize: '',
@@ -257,7 +257,7 @@ export default function PatientDashboard() {
                   🚨 SECURITY THREAT ALERT: Anomalous Access Attempt Blocked!
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  MedChain Machine Learning Engine blocked a suspicious access attempt on record <strong>"{securityAlerts[0]?.recordTitle}"</strong> by {securityAlerts[0]?.doctorName} (Risk Score: {securityAlerts[0]?.riskScore}% - LOCKDOWN Mode).
+                  MedChain Machine Learning Engine blocked a suspicious access attempt on record <strong>"{securityAlerts[0]?.recordTitle || securityAlerts[0]?.recordId || 'Medical Record'}"</strong> by {securityAlerts[0]?.doctorName || securityAlerts[0]?.userId || 'Requester'} (Risk Score: {typeof securityAlerts[0]?.riskScore === 'number' ? (securityAlerts[0]?.riskScore <= 1.0 ? securityAlerts[0]?.riskScore * 100 : securityAlerts[0]?.riskScore).toFixed(1) + '%' : 'N/A'} - Risk Level: {securityAlerts[0]?.riskLevel || 'CRITICAL'}).
                 </Typography>
               </Box>
             </Stack>
@@ -373,7 +373,7 @@ export default function PatientDashboard() {
                         <TableCell sx={{ fontWeight: 700 }}>Record Title</TableCell>
                         <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
                         <TableCell sx={{ fontWeight: 700 }}>CP-ABE Policy</TableCell>
-                        <TableCell sx={{ fontWeight: 700 }}>IPFS CID</TableCell>
+                        <TableCell sx={{ fontWeight: 700 }}>SHA-256 Checksum</TableCell>
                         <TableCell sx={{ fontWeight: 700 }}>Authorized Doctors</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
                       </TableRow>
@@ -394,9 +394,9 @@ export default function PatientDashboard() {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            <Tooltip title={record.ipfsCid}>
+                            <Tooltip title={record.sha256Hash || 'AES-256-GCM Encrypted Payload Fingerprint'}>
                               <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
-                                {record.ipfsCid ? `${record.ipfsCid.substring(0, 10)}...` : 'N/A'}
+                                {record.sha256Hash ? `${record.sha256Hash.substring(0, 12)}...` : 'Verified'}
                               </Typography>
                             </Tooltip>
                           </TableCell>
@@ -520,37 +520,81 @@ export default function PatientDashboard() {
               </Box>
             ) : (
               <Stack spacing={2}>
-                {securityAlerts.map((alert) => (
-                  <Paper key={alert.id} variant="outlined" sx={{ p: 2.5, borderRadius: 3, borderLeft: 6, borderColor: 'error.main', bgcolor: 'background.paper' }}>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2}>
-                      <Box flexGrow={1}>
-                        <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-                          <Chip label={`Risk Score: ${alert.riskScore}% (${alert.status})`} color="error" size="small" sx={{ fontWeight: 800 }} />
-                          <Typography variant="subtitle1" fontWeight={800}>
-                            Target Record: {alert.recordTitle}
+                {securityAlerts.map((alert) => {
+                  const rawScore = alert.riskScore;
+                  const scorePct = typeof rawScore === 'number'
+                    ? (rawScore <= 1.0 ? rawScore * 100 : rawScore).toFixed(1) + '%'
+                    : '0.0%';
+
+                  const decimalScore = typeof rawScore === 'number'
+                    ? (rawScore <= 1.0 ? rawScore : rawScore / 100)
+                    : 0;
+
+                  const computedRiskLevel = decimalScore >= 0.75 ? 'CRITICAL'
+                    : decimalScore >= 0.50 ? 'HIGH'
+                    : decimalScore >= 0.25 ? 'MEDIUM'
+                    : 'LOW';
+
+                  const riskLevel = alert.riskLevel || computedRiskLevel;
+                  const rationaleText = alert.rationale || alert.reason || 'No threat rationale detailed.';
+                  const txHash = alert.blockchainTxHash || alert.txHash || null;
+                  const doctorName = alert.doctorName || alert.userName || alert.userId || 'Unknown Requester';
+                  const ipAddr = alert.ipAddress || 'Not available';
+
+                  const getRiskChipColor = (lvl) => {
+                    switch (lvl?.toUpperCase()) {
+                      case 'CRITICAL': return 'error';
+                      case 'HIGH':     return 'warning';
+                      case 'MEDIUM':   return 'info';
+                      default:         return 'success';
+                    }
+                  };
+
+                  const getStatusChipColor = (st) => {
+                    switch (st?.toUpperCase()) {
+                      case 'OPEN':         return 'error';
+                      case 'ACKNOWLEDGED': return 'warning';
+                      case 'RESOLVED':     return 'success';
+                      default:             return 'default';
+                    }
+                  };
+
+                  return (
+                    <Paper key={alert.id} variant="outlined" sx={{ p: 2.5, borderRadius: 3, borderLeft: 6, borderColor: `${getRiskChipColor(riskLevel)}.main`, bgcolor: 'background.paper' }}>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2}>
+                        <Box flexGrow={1}>
+                          <Stack direction="row" spacing={1} alignItems="center" mb={1} flexWrap="wrap">
+                            <Chip label={`Risk Score: ${scorePct}`} color={getRiskChipColor(riskLevel)} size="small" sx={{ fontWeight: 800 }} />
+                            <Chip label={`Risk Level: ${riskLevel}`} color={getRiskChipColor(riskLevel)} size="small" sx={{ fontWeight: 800 }} />
+                            <Chip label={`Status: ${alert.status}`} color={getStatusChipColor(alert.status)} variant="outlined" size="small" sx={{ fontWeight: 800 }} />
+                            <Typography variant="subtitle1" fontWeight={800} sx={{ ml: 1 }}>
+                              Target Record: {alert.recordTitle || alert.recordId || 'Unknown Record'}
+                            </Typography>
+                          </Stack>
+                          <Typography variant="body2" color="text.secondary">
+                            <strong>Requester:</strong> {doctorName} • <strong>IP Address:</strong> {ipAddr}
                           </Typography>
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary">
-                          <strong>Requester:</strong> {alert.doctorName} • <strong>IP Address:</strong> {alert.ipAddress}
-                        </Typography>
-                        <Alert severity="error" icon={<WarningIcon />} sx={{ mt: 1.5, py: 0.5 }}>
-                          <strong>Threat Rationale:</strong> {alert.reason}
-                        </Alert>
-                        <Typography variant="caption" color="text.secondary" display="block" mt={1}>
-                          Ethereum Audit TX: <code style={{ background: '#eee', padding: '2px 6px', borderRadius: 4 }}>{alert.txHash}</code> • Timestamp: {new Date(alert.timestamp).toLocaleString()}
-                        </Typography>
-                      </Box>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="error"
-                        onClick={() => handleDismissAlert(alert.id)}
-                      >
-                        Dismiss Alert
-                      </Button>
-                    </Stack>
-                  </Paper>
-                ))}
+                          <Alert severity="error" icon={<WarningIcon />} sx={{ mt: 1.5, py: 0.5 }}>
+                            <strong>Threat Rationale:</strong> {rationaleText}
+                          </Alert>
+                          <Typography variant="caption" color="text.secondary" display="block" mt={1}>
+                            Blockchain Audit Transaction: {txHash ? <code style={{ background: '#eee', padding: '2px 6px', borderRadius: 4 }}>{txHash}</code> : <em>Not available</em>} • Timestamp: {new Date(alert.timestamp).toLocaleString()}
+                          </Typography>
+                        </Box>
+                        {alert.status !== 'RESOLVED' && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            onClick={() => handleDismissAlert(alert.id)}
+                          >
+                            Dismiss Alert
+                          </Button>
+                        )}
+                      </Stack>
+                    </Paper>
+                  );
+                })}
               </Stack>
             )}
           </Paper>
@@ -587,12 +631,38 @@ export default function PatientDashboard() {
               </TextField>
 
               <TextField
-                label="CP-ABE Access Policy"
+                label="Access-Control Policy Selection"
+                select
                 fullWidth
                 value={uploadData.accessPolicy}
                 onChange={(e) => setUploadData({ ...uploadData, accessPolicy: e.target.value })}
-                helperText='e.g., "specialty:CARDIOLOGY AND hospital:GENERAL"'
-              />
+                helperText="Select Attribute-Based Access-Control Policy for doctor access authorization"
+              >
+                <MenuItem value="(specialty=Cardiology AND hospital=CityHospital) OR (license=Senior)">
+                  Cardiology Dept & Senior Doctors ((specialty=Cardiology AND hospital=CityHospital) OR (license=Senior))
+                </MenuItem>
+                <MenuItem value="(specialty=Cardiology AND hospital=CityHospital)">
+                  Cardiology Department Only (specialty=Cardiology AND hospital=CityHospital)
+                </MenuItem>
+                <MenuItem value="(specialty=Radiology AND hospital=CityHospital)">
+                  Radiology & Imaging Team (specialty=Radiology AND hospital=CityHospital)
+                </MenuItem>
+                <MenuItem value="(specialty=Neurology AND hospital=CityHospital)">
+                  Neurology Department (specialty=Neurology AND hospital=CityHospital)
+                </MenuItem>
+                <MenuItem value="(specialty=Oncology AND hospital=CancerInstitute)">
+                  Oncology Specialists (specialty=Oncology AND hospital=CancerInstitute)
+                </MenuItem>
+                <MenuItem value="(license=Senior)">
+                  Senior Licensed Officers Only (license=Senior)
+                </MenuItem>
+                <MenuItem value="(department=Pediatrics OR department=Cardiology)">
+                  Pediatrics & Cardiology Staff (department=Pediatrics OR department=Cardiology)
+                </MenuItem>
+                <MenuItem value="specialty:ALL">
+                  All Verified Hospital Medical Staff (specialty:ALL)
+                </MenuItem>
+              </TextField>
 
               <TextField
                 label="Description / Notes"

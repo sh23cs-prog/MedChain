@@ -72,7 +72,7 @@ export default function Landing() {
   const workflowSteps = [
     {
       label: 'Patient Uploads Record',
-      description: 'File is encrypted locally with AES-256-GCM. Encrypted file is sent to IPFS and assigned a cryptographic CID.',
+      description: 'File is encrypted locally with AES-256-GCM and stored securely off-chain with SHA-256 checksum verification.',
     },
     {
       label: 'CP-ABE Key Encapsulation',
@@ -80,7 +80,7 @@ export default function Landing() {
     },
     {
       label: 'Blockchain Registration',
-      description: 'Record ID hash, IPFS CID hash, and patient pseudonym (PID) are permanently committed to Ethereum smart contract.',
+      description: 'Record ID hash, SHA-256 payload checksum, and patient pseudonym (PID) are permanently committed to Hardhat EVM smart contract.',
     },
     {
       label: 'Doctor Access & ML Scoring',

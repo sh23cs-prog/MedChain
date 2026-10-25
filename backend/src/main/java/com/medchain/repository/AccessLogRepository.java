@@ -1,38 +1,32 @@
 package com.medchain.repository;
 
 import com.medchain.model.AccessLog;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * MongoDB repository for AccessLog entries.
- * Each log entry represents an on-chain-auditable access event.
- */
 @Repository
-public interface AccessLogRepository extends MongoRepository<AccessLog, String> {
+public interface AccessLogRepository extends JpaRepository<AccessLog, String> {
 
-    // ── User/Doctor queries ──────────────────────────────────────────────────
     List<AccessLog> findByUserId(String userId);
     List<AccessLog> findByDoctorId(String doctorId);
-
-    // ── Record queries ────────────────────────────────────────────────────────
     List<AccessLog> findByRecordId(String recordId);
 
-    // ── Anomaly detection queries ─────────────────────────────────────────────
     List<AccessLog> findByAnomalyScoreGreaterThan(double threshold);
     List<AccessLog> findByFlaggedTrue();
     List<AccessLog> findByGrantedFalse();
 
-    // ── Time-based queries (for ML feature computation) ───────────────────────
     List<AccessLog> findByUserIdAndTimestampAfter(String userId, LocalDateTime after);
     long countByUserIdAndTimestampAfter(String userId, LocalDateTime after);
-    long countDistinctPatientPIDByUserIdAndTimestampAfter(String userId, LocalDateTime after);
+    java.util.Optional<AccessLog> findTopByUserIdOrderByTimestampDesc(String userId);
 
-    // ── Count helpers ─────────────────────────────────────────────────────────
+    @Query("SELECT COUNT(DISTINCT a.patientPID) FROM AccessLog a WHERE a.userId = :userId AND a.timestamp > :after")
+    long countDistinctPatientPIDByUserIdAndTimestampAfter(@Param("userId") String userId, @Param("after") LocalDateTime after);
+
     long countByGrantedFalse();
     long countByAction(String action);
 }
