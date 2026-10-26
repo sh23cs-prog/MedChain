@@ -73,11 +73,15 @@ public class SecurityConfig {
 
                 // ── Doctor-specific ───────────────────────────────────────────
                 .requestMatchers("/api/records/doctor/**").hasAnyRole("DOCTOR", "ADMIN")
-                .requestMatchers("/api/records/*/view").hasAnyRole("DOCTOR", "ADMIN")
-                .requestMatchers("/api/records/*/file").hasAnyRole("DOCTOR", "ADMIN")
+
+                // ── Record View / Download (Patient owner, authorized Doctor, Admin) ──
+                .requestMatchers("/api/records/*/view").hasAnyRole("PATIENT", "DOCTOR", "ADMIN")
+                .requestMatchers("/api/records/*/download").hasAnyRole("PATIENT", "DOCTOR", "ADMIN")
+                .requestMatchers("/api/records/*/file").hasAnyRole("PATIENT", "DOCTOR", "ADMIN")
 
                 // ── Patient-specific ──────────────────────────────────────────
                 .requestMatchers("/api/records/upload").hasAnyRole("PATIENT", "ADMIN")
+                .requestMatchers("/api/records/upload-file").hasAnyRole("PATIENT", "ADMIN")
 
                 // ── Authenticated (any role) ──────────────────────────────────
                 .requestMatchers("/api/records/**").authenticated()

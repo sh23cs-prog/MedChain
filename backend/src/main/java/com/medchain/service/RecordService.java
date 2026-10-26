@@ -7,10 +7,12 @@ import com.medchain.model.*;
 import com.medchain.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
@@ -38,6 +40,8 @@ public class RecordService {
     private final MLService mlService;
     private final BlockchainService blockchainService;
     private final AccessService accessService;
+
+    private final Optional<JdbcTemplate> jdbcTemplate;
 
     // ─── Real File Upload ─────────────────────────────────────────────────────
 
@@ -186,6 +190,7 @@ public class RecordService {
 
     // ─── View Record Flow with AES-256-GCM & SHA-256 Checksum Verification ──
 
+    @Transactional
     public Map<String, Object> viewRecord(String recordId, String requesterEmail, String ipAddress) {
         User requester = userRepository.findByEmail(requesterEmail)
                 .orElseThrow(() -> new MedChainException("User not found for email: " + requesterEmail));
@@ -221,26 +226,13 @@ public class RecordService {
         MLService.AnomalyRequest telemetryReq = mlService.buildTelemetry(requester, record);
         MLService.AnomalyResponse mlRes = mlService.scoreAccess(telemetryReq, requester.getId(), recordId);
 
-        // 2. Read Encrypted Ciphertext Payload (Disk cache with database persistent fallback)
-        byte[] ciphertext = null;
-        if (record.getStoragePath() != null && !record.getStoragePath().isBlank()) {
-            ciphertext = fileStorageService.readEncryptedFile(record.getStoragePath());
-        }
-        if (ciphertext == null && record.getEncryptedContent() != null && !record.getEncryptedContent().isBlank()) {
-            try {
-                ciphertext = Base64.getDecoder().decode(record.getEncryptedContent());
-            } catch (Exception e) {
-                log.warn("Failed to decode base64 encryptedContent for record {}: {}", recordId, e.getMessage());
-            }
-        }
-        if (ciphertext == null || ciphertext.length == 0) {
-            throw new MedChainException("No encrypted payload found for this medical record.");
-        }
+        // 2. Read Encrypted Ciphertext Payload & Keys (Persistent PostgreSQL prioritized)
+        ResolvedCiphertext resolved = resolveCiphertextAndKeys(record);
 
         // 3. AES-256-GCM Decryption
         byte[] decryptedBytes;
         try {
-            decryptedBytes = aesService.decrypt(ciphertext, record.getEncryptedAesKey(), record.getAesIv());
+            decryptedBytes = aesService.decrypt(resolved.ciphertext(), resolved.aesKey(), resolved.iv());
         } catch (Exception e) {
             logAction(requester.getId(), requester.getName(), requester.getPseudonymId(),
                     recordId, record.getPatientPID(), "INTEGRITY_FAILURE", ipAddress, false, 1.0, 1.0, 1.0, "CRITICAL", "AES-256-GCM authentication tag mismatch: Payload tampered", null);
@@ -303,6 +295,7 @@ public class RecordService {
 
     public record DownloadedFile(byte[] fileBytes, String filename, String mimeType, String sha256Hash) {}
 
+    @Transactional
     public DownloadedFile downloadRecordFile(String recordId, String requesterEmail, String ipAddress) {
         User requester = userRepository.findByEmail(requesterEmail)
                 .orElseThrow(() -> new MedChainException("User not found for email: " + requesterEmail));
@@ -333,24 +326,12 @@ public class RecordService {
             throw new MedChainException("Access denied: You do not have active patient approval to download this record.");
         }
 
-        byte[] ciphertext = null;
-        if (record.getStoragePath() != null && !record.getStoragePath().isBlank()) {
-            ciphertext = fileStorageService.readEncryptedFile(record.getStoragePath());
-        }
-        if (ciphertext == null && record.getEncryptedContent() != null && !record.getEncryptedContent().isBlank()) {
-            try {
-                ciphertext = Base64.getDecoder().decode(record.getEncryptedContent());
-            } catch (Exception e) {
-                log.warn("Failed to decode base64 encryptedContent for download of record {}: {}", recordId, e.getMessage());
-            }
-        }
-        if (ciphertext == null || ciphertext.length == 0) {
-            throw new MedChainException("No encrypted file stored for this record.");
-        }
+        // Read Encrypted Ciphertext Payload & Keys (Persistent PostgreSQL prioritized)
+        ResolvedCiphertext resolved = resolveCiphertextAndKeys(record);
 
         byte[] decryptedBytes;
         try {
-            decryptedBytes = aesService.decrypt(ciphertext, record.getEncryptedAesKey(), record.getAesIv());
+            decryptedBytes = aesService.decrypt(resolved.ciphertext(), resolved.aesKey(), resolved.iv());
         } catch (Exception e) {
             logAction(requester.getId(), requester.getName(), requester.getPseudonymId(),
                     recordId, record.getPatientPID(), "INTEGRITY_FAILURE", ipAddress, false, 1.0, 1.0, 1.0, "CRITICAL", "AES-256-GCM authentication tag mismatch on download", null);
@@ -395,6 +376,147 @@ public class RecordService {
 
         String effectiveMime = fileValidationService.detectMimeType(decryptedBytes, record.getFileName(), record.getFileMimeType());
         return new DownloadedFile(decryptedBytes, record.getFileName(), effectiveMime, recalculatedSha256);
+    }
+
+    // ─── Unified Ciphertext and Encryption Key Resolution ─────────────────────
+
+    public record ResolvedCiphertext(byte[] ciphertext, String aesKey, String iv) {}
+
+    private ResolvedCiphertext resolveCiphertextAndKeys(MedicalRecord record) {
+        // 1. Check if this record is a demonstration metadata-only entry (e.g. from DataSeeder)
+        boolean hasNoPayload = (record.getEncryptedContent() == null || record.getEncryptedContent().isBlank())
+                && (record.getStoragePath() == null || record.getStoragePath().isBlank());
+
+        if (hasNoPayload) {
+            throw new MedChainException(
+                "This medical record ('" + record.getTitle() + "') is a demonstration metadata entry and does not contain a stored encrypted file payload. " +
+                "Please upload a medical document file (PDF, PNG, JPG) to test AES-256-GCM encryption, decryption, and SHA-256 integrity verification."
+            );
+        }
+
+        byte[] ciphertext = null;
+        String aesKey = record.getEncryptedAesKey();
+        String iv = record.getAesIv();
+
+        // 2. Prioritize reading directly from database persistent field (encryptedContent)
+        if (record.getEncryptedContent() != null && !record.getEncryptedContent().isBlank()) {
+            String encContent = record.getEncryptedContent().trim();
+            // Check if it's a legacy PostgreSQL Large Object OID (pure numeric digits)
+            if (encContent.matches("^\\d+$")) {
+                ciphertext = tryRecoverLegacyLobPayload(record, encContent);
+            } else {
+                try {
+                    ciphertext = Base64.getDecoder().decode(encContent);
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid Base64 in encryptedContent for record {}: {}", record.getId(), e.getMessage());
+                }
+            }
+        }
+
+        // Check if encryptedAesKey is a legacy OID (pure numeric digits)
+        if (aesKey != null && aesKey.trim().matches("^\\d+$")) {
+            String recoveredKey = tryRecoverLegacyLobString(aesKey.trim());
+            if (recoveredKey != null && !recoveredKey.isBlank()) {
+                aesKey = recoveredKey;
+                try {
+                    record.setEncryptedAesKey(aesKey);
+                    recordRepository.save(record);
+                } catch (Exception ex) {
+                    log.warn("Failed to persist recovered AES key for record {}: {}", record.getId(), ex.getMessage());
+                }
+            }
+        }
+
+        // 3. Fall back to local filesystem disk storage if DB ciphertext wasn't available
+        if ((ciphertext == null || ciphertext.length == 0) && record.getStoragePath() != null && !record.getStoragePath().isBlank()) {
+            ciphertext = fileStorageService.readEncryptedFile(record.getStoragePath());
+            // If read successfully from disk, persist to PostgreSQL so future container restarts keep the file!
+            if (ciphertext != null && ciphertext.length > 0) {
+                try {
+                    record.setEncryptedContent(Base64.getEncoder().encodeToString(ciphertext));
+                    recordRepository.save(record);
+                    log.info("Backfilled encryptedContent into PostgreSQL for record {}", record.getId());
+                } catch (Exception ex) {
+                    log.warn("Failed to backfill encryptedContent into DB for record {}: {}", record.getId(), ex.getMessage());
+                }
+            }
+        }
+
+        // 4. If payload is still missing, provide an accurate, actionable message
+        if (ciphertext == null || ciphertext.length == 0) {
+            throw new MedChainException(
+                "No encrypted payload could be retrieved for medical record '" + record.getTitle() + "' (ID: " + record.getId() + "). " +
+                "The file payload was stored on an ephemeral container volume prior to database persistence migration and is unrecoverable. " +
+                "Please re-upload this document."
+            );
+        }
+
+        if (aesKey == null || aesKey.isBlank() || iv == null || iv.isBlank()) {
+            throw new MedChainException(
+                "Missing encryption key or initialization vector for record '" + record.getTitle() + "' (ID: " + record.getId() + "). " +
+                "Unable to decrypt payload."
+            );
+        }
+
+        return new ResolvedCiphertext(ciphertext, aesKey, iv);
+    }
+
+    private byte[] tryRecoverLegacyLobPayload(MedicalRecord record, String oidStr) {
+        if (jdbcTemplate == null || jdbcTemplate.isEmpty()) {
+            return null;
+        }
+        try {
+            long oid = Long.parseLong(oidStr);
+            log.info("Attempting to recover legacy LOB with OID {} for record {}", oid, record.getId());
+            byte[] rawBytes = jdbcTemplate.get().queryForObject(
+                "SELECT lo_get(?::oid)",
+                byte[].class,
+                oid
+            );
+            if (rawBytes != null && rawBytes.length > 0) {
+                String asText = new String(rawBytes, StandardCharsets.UTF_8).trim();
+                byte[] decodedCiphertext;
+                try {
+                    decodedCiphertext = Base64.getDecoder().decode(asText);
+                } catch (Exception e) {
+                    // Not Base64 text, large object may have stored raw binary bytes
+                    decodedCiphertext = rawBytes;
+                }
+
+                // Heal the record permanently in the PostgreSQL TEXT column
+                try {
+                    record.setEncryptedContent(Base64.getEncoder().encodeToString(decodedCiphertext));
+                    recordRepository.save(record);
+                    log.info("Successfully recovered and healed legacy LOB payload for record {}", record.getId());
+                } catch (Exception ex) {
+                    log.warn("Failed to persist healed record {}: {}", record.getId(), ex.getMessage());
+                }
+                return decodedCiphertext;
+            }
+        } catch (Exception e) {
+            log.warn("Could not recover legacy LOB OID {} for record {}: {}", oidStr, record.getId(), e.getMessage());
+        }
+        return null;
+    }
+
+    private String tryRecoverLegacyLobString(String oidStr) {
+        if (jdbcTemplate == null || jdbcTemplate.isEmpty()) {
+            return null;
+        }
+        try {
+            long oid = Long.parseLong(oidStr);
+            byte[] rawBytes = jdbcTemplate.get().queryForObject(
+                "SELECT lo_get(?::oid)",
+                byte[].class,
+                oid
+            );
+            if (rawBytes != null && rawBytes.length > 0) {
+                return new String(rawBytes, StandardCharsets.UTF_8).trim();
+            }
+        } catch (Exception e) {
+            log.warn("Could not recover legacy LOB OID {} as string: {}", oidStr, e.getMessage());
+        }
+        return null;
     }
 
     // ─── Access Request & Grant/Revoke Methods ────────────────────────────────
