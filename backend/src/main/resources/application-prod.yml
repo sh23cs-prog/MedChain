@@ -29,6 +29,7 @@ spring:
     port: ${SPRING_MAIL_PORT:${SMTP_PORT:${MAIL_PORT:587}}}
     username: ${SPRING_MAIL_USERNAME:${SMTP_USERNAME:${MAIL_USERNAME:}}}
     password: ${SPRING_MAIL_PASSWORD:${SMTP_PASSWORD:${MAIL_PASSWORD:}}}
+    from: ${SPRING_MAIL_FROM:${SMTP_FROM:${MAIL_FROM:onboarding@resend.dev}}}
     properties:
       mail:
         smtp:
@@ -43,10 +44,10 @@ spring:
 resend:
   api:
     key: ${RESEND_API_KEY:}
-  from: ${RESEND_FROM:MedChain <onboarding@resend.dev>}
+  from: ${SPRING_MAIL_FROM:${RESEND_FROM:MedChain <onboarding@resend.dev>}}
 
 mail:
-  from: ${SPRING_MAIL_FROM:${SMTP_FROM:${MAIL_FROM:}}}
+  from: ${SPRING_MAIL_FROM:${SMTP_FROM:${MAIL_FROM:onboarding@resend.dev}}}
 
 ml:
   service:
