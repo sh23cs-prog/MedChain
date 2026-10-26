@@ -31,6 +31,14 @@ spring:
           starttls:
             enable: true
 
+ml:
+  service:
+    url: ${ML_SERVICE_URL:https://medchain-sentinel-ml.onrender.com}
+
+cors:
+  allowed:
+    origins: ${CORS_ALLOWED_ORIGINS:https://med-chain-amber.vercel.app,https://*.vercel.app,http://localhost:3000}
+
 logging:
   level:
     com.medchain: INFO

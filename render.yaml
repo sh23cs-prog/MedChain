@@ -17,13 +17,13 @@ services:
           name: medchain-db
           property: connectionString
       - key: ML_SERVICE_URL
-        value: http://medchain-sentinel-ml:8000
+        value: https://medchain-sentinel-ml.onrender.com
       - key: JWT_SECRET
         generateValue: true
       - key: AES_SECRET_KEY
         generateValue: true
       - key: CORS_ALLOWED_ORIGINS
-        value: "*"
+        value: "https://med-chain-amber.vercel.app,https://*.vercel.app,http://localhost:3000"
       - key: BLOCKCHAIN_ENABLED
         value: "false"
 
