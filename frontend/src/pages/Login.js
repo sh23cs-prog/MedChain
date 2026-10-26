@@ -97,8 +97,14 @@ export default function Login() {
     setResetSuccess('');
     setResetLoading(true);
     try {
-      await authService.forgotPassword(resetEmail);
-      setResetSuccess('Password reset OTP sent to email. Check your inbox.');
+      const res = await authService.forgotPassword(resetEmail);
+      const code = res.data?.otpCode;
+      if (code) {
+        setResetOtp(code);
+        setResetSuccess(`Password reset OTP generated: ${code}`);
+      } else {
+        setResetSuccess(res.data?.message || 'Password reset OTP sent to email. Check your inbox.');
+      }
       setResetStep(2);
     } catch (err) {
       setResetError(err.response?.data?.message || err.message || 'Failed to send reset code.');

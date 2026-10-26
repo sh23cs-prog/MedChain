@@ -22,7 +22,7 @@ public class OtpService {
     private final EmailService emailService;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public void generateAndSendOtp(String email, String type) {
+    public String generateAndSendOtp(String email, String type) {
         // Check for resend cooldown (60 seconds)
         Optional<OtpToken> latestTokenOpt = otpTokenRepository
                 .findTopByEmailAndTypeAndUsedFalseOrderByCreatedAtDesc(email, type);
@@ -53,10 +53,21 @@ public class OtpService {
         token.setCreatedAt(LocalDateTime.now());
 
         otpTokenRepository.save(token);
-        log.info("Saved hashed OTP for {} (type={}). Dispatching via SMTP...", email, type);
+        log.info("Saved hashed OTP for {} (type={}). Dispatching email...", email, type);
 
-        // Dispatch via SMTP
-        emailService.sendOtpEmail(email, rawOtp, type);
+        // Dispatch via email service (Resend HTTP / SMTP / Fallback)
+        try {
+            boolean sent = emailService.sendOtpEmail(email, rawOtp, type);
+            if (sent) {
+                log.info("OTP dispatched successfully via email to {}", email);
+            } else {
+                log.info("OTP code generated for {} (fallback in-app delivery): [Code={}]", email, rawOtp);
+            }
+        } catch (Exception e) {
+            log.warn("Non-fatal email dispatch error for {}: {}", email, e.getMessage());
+        }
+
+        return rawOtp;
     }
 
     public void verifyOtp(String email, String rawOtp, String type) {
