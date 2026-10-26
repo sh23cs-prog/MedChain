@@ -100,6 +100,11 @@ public class AuthService {
                     return new MedChainException("Invalid credentials");
                 });
 
+        if (!user.isActive()) {
+            logAudit(user.getId(), user.getName(), user.getPseudonymId(), "LOGIN_FAILED", false, "Account deactivated");
+            throw new MedChainException("Account is deactivated. Please contact an administrator.");
+        }
+
         if (user.isBlocked()) {
             logAudit(user.getId(), user.getName(), user.getPseudonymId(), "LOGIN_FAILED", false, "Account blocked");
             throw new MedChainException("Account blocked. Contact administrator.");

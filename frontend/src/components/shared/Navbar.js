@@ -29,6 +29,7 @@ import {
   Menu as MenuIcon,
   Logout as LogoutIcon,
   Architecture as ArchIcon,
+  People as UsersIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
 import { useAppTheme } from '../../context/ThemeContext';
@@ -62,6 +63,7 @@ export default function Navbar() {
   const navLinks = [
     { label: 'Home', path: '/' },
     ...(user ? [{ label: 'Dashboard', path: getDashboardPath(), icon: <DashboardIcon /> }] : []),
+    ...(user && user.role === 'ADMIN' ? [{ label: 'Users', path: '/admin/users', icon: <UsersIcon /> }] : []),
     ...(user ? [{ label: 'Monitoring', path: '/monitoring', icon: <MonitoringIcon /> }] : []),
     ...(user ? [{ label: 'Blockchain Explorer', path: '/blockchain-explorer', icon: <BlockchainIcon /> }] : []),
     { label: 'Architecture', path: '/architecture', icon: <ArchIcon /> },

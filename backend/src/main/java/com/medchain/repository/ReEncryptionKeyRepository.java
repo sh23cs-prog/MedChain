@@ -12,4 +12,5 @@ public interface ReEncryptionKeyRepository extends JpaRepository<ReEncryptionKey
     Optional<ReEncryptionKey> findByRecordIdAndDoctorIdAndActiveTrue(String recordId, String doctorId);
     List<ReEncryptionKey> findByDoctorId(String doctorId);
     void deleteByRecordIdAndDoctorId(String recordId, String doctorId);
+    void deleteByDoctorId(String doctorId);
 }

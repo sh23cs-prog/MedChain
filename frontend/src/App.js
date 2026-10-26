@@ -8,6 +8,7 @@ import Register from './pages/Register';
 import PatientDashboard from './pages/PatientDashboard';
 import DoctorDashboard from './pages/DoctorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import UserManagement from './pages/UserManagement';
 import Monitoring from './pages/Monitoring';
 import BlockchainExplorer from './pages/BlockchainExplorer';
 import Architecture from './pages/Architecture';
@@ -57,6 +58,14 @@ export default function App() {
               element={
                 <PrivateRoute role="ADMIN">
                   <AdminDashboard />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/admin/users"
+              element={
+                <PrivateRoute role="ADMIN">
+                  <UserManagement />
                 </PrivateRoute>
               }
             />

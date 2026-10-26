@@ -34,12 +34,15 @@ import {
   Warning as AlertIcon,
   Block as BlockIcon,
   CheckCircle as UnblockIcon,
+  PersonOff as DeactivateIcon,
+  DeleteForever as DeleteIcon,
   Download as DownloadIcon,
   PictureAsPdf as PdfIcon,
   TableChart as CsvIcon,
   Refresh as RefreshIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
+import { Link } from 'react-router-dom';
 import {
   AreaChart,
   Area,
@@ -102,18 +105,32 @@ export default function AdminDashboard() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  const handleBlockUser = async (targetUser) => {
+  const handleConfirmAction = async () => {
+    const { action, user: targetUser } = confirmDialog;
+    if (!targetUser) return;
     try {
-      if (targetUser.blocked) {
-        await adminService.unblockUser(targetUser.id);
-        showNotification(`User ${targetUser.name} unblocked successfully`);
-      } else {
+      if (action === 'deactivate') {
+        await adminService.deactivateUser(targetUser.id);
+        showNotification(`User ${targetUser.name} deactivated. Active sessions revoked.`, 'warning');
+      } else if (action === 'activate') {
+        await adminService.activateUser(targetUser.id);
+        showNotification(`User ${targetUser.name} reactivated.`, 'success');
+      } else if (action === 'block') {
         await adminService.blockUser(targetUser.id);
         showNotification(`User ${targetUser.name} blocked!`, 'warning');
+      } else if (action === 'unblock') {
+        await adminService.unblockUser(targetUser.id);
+        showNotification(`User ${targetUser.name} unblocked successfully`);
+      } else if (action === 'delete') {
+        const res = await adminService.deleteUser(targetUser.id);
+        showNotification(res.data?.message || `User ${targetUser.name} deleted.`);
       }
+      setConfirmDialog({ open: false, user: null, action: '' });
       fetchAdminData();
     } catch (err) {
-      showNotification('Action failed', 'error');
+      const msg = err.response?.data?.message || err.message || 'Action failed';
+      showNotification(msg, 'error');
+      setConfirmDialog({ open: false, user: null, action: '' });
     }
   };
 
@@ -246,7 +263,7 @@ export default function AdminDashboard() {
         {/* Tab 0: User Management */}
         {tabValue === 0 && (
           <Paper elevation={2} sx={{ p: 3, borderRadius: 3 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={3} spacing={2}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} mb={3} spacing={2}>
               <TextField
                 placeholder="Search users by name, email, or role..."
                 size="small"
@@ -259,11 +276,23 @@ export default function AdminDashboard() {
                     </InputAdornment>
                   ),
                 }}
-                sx={{ width: 320 }}
+                sx={{ width: { xs: '100%', sm: 320 } }}
               />
-              <IconButton onClick={fetchAdminData}>
-                <RefreshIcon />
-              </IconButton>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Button
+                  component={Link}
+                  to="/admin/users"
+                  variant="contained"
+                  color="primary"
+                  size="small"
+                  startIcon={<UsersIcon />}
+                >
+                  Dedicated User Management Page
+                </Button>
+                <IconButton onClick={fetchAdminData}>
+                  <RefreshIcon />
+                </IconButton>
+              </Stack>
             </Stack>
 
             <TableContainer>
@@ -275,47 +304,94 @@ export default function AdminDashboard() {
                     <TableCell sx={{ fontWeight: 700 }}>Role</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Pseudonym PID</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700 }}>Action</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredUsers.slice(userPage * userRowsPerPage, userPage * userRowsPerPage + userRowsPerPage).map((u) => (
-                    <TableRow key={u.id} hover>
-                      <TableCell fontWeight={700}>{u.name}</TableCell>
-                      <TableCell>{u.email}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={u.role}
-                          size="small"
-                          color={u.role === 'PATIENT' ? 'info' : u.role === 'DOCTOR' ? 'success' : 'secondary'}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                          {u.pseudonymId ? `${u.pseudonymId.substring(0, 12)}...` : 'Pending'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={u.blocked ? 'BLOCKED' : 'ACTIVE'}
-                          size="small"
-                          color={u.blocked ? 'error' : 'success'}
-                          variant="filled"
-                        />
-                      </TableCell>
-                      <TableCell align="right">
-                        <Button
-                          size="small"
-                          variant={u.blocked ? 'contained' : 'outlined'}
-                          color={u.blocked ? 'success' : 'error'}
-                          startIcon={u.blocked ? <UnblockIcon /> : <BlockIcon />}
-                          onClick={() => setConfirmDialog({ open: true, user: u, action: u.blocked ? 'unblock' : 'block' })}
-                        >
-                          {u.blocked ? 'Unblock' : 'Block User'}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredUsers.slice(userPage * userRowsPerPage, userPage * userRowsPerPage + userRowsPerPage).map((u) => {
+                    const isSelf = user?.email?.toLowerCase() === u.email?.toLowerCase();
+                    return (
+                      <TableRow key={u.id} hover>
+                        <TableCell fontWeight={700}>
+                          {u.name} {isSelf && <Chip label="You" size="small" color="primary" sx={{ height: 18, fontSize: '0.65rem', ml: 0.5 }} />}
+                        </TableCell>
+                        <TableCell>{u.email}</TableCell>
+                        <TableCell>
+                          <Chip
+                            label={u.role}
+                            size="small"
+                            color={u.role === 'PATIENT' ? 'info' : u.role === 'DOCTOR' ? 'success' : 'secondary'}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                            {u.pseudonymId ? `${u.pseudonymId.substring(0, 12)}...` : 'Pending'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={u.blocked ? 'BLOCKED' : u.active ? 'ACTIVE' : 'DEACTIVATED'}
+                            size="small"
+                            color={u.blocked ? 'error' : u.active ? 'success' : 'warning'}
+                            variant="filled"
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
+                            {/* Deactivate / Activate Button */}
+                            {u.active ? (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="warning"
+                                startIcon={<DeactivateIcon />}
+                                disabled={isSelf}
+                                onClick={() => setConfirmDialog({ open: true, user: u, action: 'deactivate' })}
+                              >
+                                Deactivate
+                              </Button>
+                            ) : (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="success"
+                                startIcon={<UnblockIcon />}
+                                disabled={isSelf}
+                                onClick={() => setConfirmDialog({ open: true, user: u, action: 'activate' })}
+                              >
+                                Activate
+                              </Button>
+                            )}
+
+                            {/* Block / Unblock Button */}
+                            <Button
+                              size="small"
+                              variant="text"
+                              color={u.blocked ? 'success' : 'error'}
+                              disabled={isSelf}
+                              onClick={() => setConfirmDialog({ open: true, user: u, action: u.blocked ? 'unblock' : 'block' })}
+                            >
+                              {u.blocked ? 'Unblock' : 'Block'}
+                            </Button>
+
+                            {/* Delete User Button */}
+                            <Tooltip title={isSelf ? "Cannot delete own account" : "Permanently remove user"}>
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  disabled={isSelf}
+                                  onClick={() => setConfirmDialog({ open: true, user: u, action: 'delete' })}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -398,14 +474,50 @@ export default function AdminDashboard() {
         )}
       </Container>
 
-      {/* Confirmation Dialog for Block/Unblock */}
+      {/* Confirmation Dialog for User Actions */}
       <ConfirmDialog
         open={confirmDialog.open}
-        title={`${confirmDialog.action === 'block' ? 'Block' : 'Unblock'} User`}
-        content={`Are you sure you want to ${confirmDialog.action} ${confirmDialog.user?.name}?`}
-        confirmText={confirmDialog.action === 'block' ? 'Block' : 'Unblock'}
-        confirmColor={confirmDialog.action === 'block' ? 'error' : 'success'}
-        onConfirm={() => handleBlockUser(confirmDialog.user)}
+        title={
+          confirmDialog.action === 'deactivate'
+            ? 'Deactivate User Account'
+            : confirmDialog.action === 'activate'
+            ? 'Reactivate User Account'
+            : confirmDialog.action === 'delete'
+            ? 'Permanently Delete User'
+            : confirmDialog.action === 'block'
+            ? 'Block User Account'
+            : 'Unblock User Account'
+        }
+        content={
+          confirmDialog.action === 'deactivate'
+            ? `Are you sure you want to deactivate ${confirmDialog.user?.name} (${confirmDialog.user?.email})? Active sessions will be revoked and login blocked. Records remain preserved.`
+            : confirmDialog.action === 'activate'
+            ? `Reactivate account for ${confirmDialog.user?.name}? The user will regain access to their account.`
+            : confirmDialog.action === 'delete'
+            ? `Permanently remove user ${confirmDialog.user?.name} (${confirmDialog.user?.email})? If active medical records exist, healthcare compliance requires deactivation instead.`
+            : confirmDialog.action === 'block'
+            ? `Block ${confirmDialog.user?.name}? Active sessions will be immediately terminated.`
+            : `Unblock ${confirmDialog.user?.name}?`
+        }
+        confirmText={
+          confirmDialog.action === 'deactivate'
+            ? 'Deactivate'
+            : confirmDialog.action === 'activate'
+            ? 'Activate'
+            : confirmDialog.action === 'delete'
+            ? 'Delete User'
+            : confirmDialog.action === 'block'
+            ? 'Block'
+            : 'Unblock'
+        }
+        confirmColor={
+          confirmDialog.action === 'delete' || confirmDialog.action === 'block'
+            ? 'error'
+            : confirmDialog.action === 'deactivate'
+            ? 'warning'
+            : 'success'
+        }
+        onConfirm={handleConfirmAction}
         onClose={() => setConfirmDialog({ open: false, user: null, action: '' })}
       />
     </Box>

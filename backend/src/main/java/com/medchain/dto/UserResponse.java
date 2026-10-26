@@ -15,5 +15,7 @@ public class UserResponse {
     private Map<String, String> attributes;
     private boolean active;
     private boolean blocked;
+    private boolean emailVerified;
+    private long recordCount;
     private LocalDateTime createdAt;
 }
