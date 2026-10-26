@@ -301,7 +301,9 @@ public class MLService {
     public boolean isHealthy() {
         try {
             Map<?, ?> response = restTemplate.getForObject(mlServiceUrl + "/health", Map.class);
-            return response != null && "UP".equalsIgnoreCase(String.valueOf(response.get("status")));
+            if (response == null) return false;
+            String status = String.valueOf(response.get("status"));
+            return "UP".equalsIgnoreCase(status) || "healthy".equalsIgnoreCase(status);
         } catch (Exception e) {
             return false;
         }

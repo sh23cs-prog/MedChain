@@ -46,7 +46,7 @@ public class DataSeeder implements CommandLineRunner {
                     User patient = userRepository.findById(r.getPatientId()).orElse(null);
                     if (patient != null && (r.getBlockchainTxHash() == null || r.getBlockchainTxHash().endsWith("mock"))) {
                         String tx = blockchainService.uploadRecord(
-                            r.getId(), r.getIpfsCid(), r.getPolicyHash(), patient.getPseudonymId());
+                            r.getId(), r.getSha256Hash() != null ? r.getSha256Hash() : r.getId(), r.getPolicyHash(), patient.getPseudonymId());
                         r.setBlockchainTxHash(tx);
                         r.setBlockchainRecordId("0x" + org.web3j.crypto.Hash.sha3String(r.getId()).substring(2, 18));
                         recordRepository.save(r);

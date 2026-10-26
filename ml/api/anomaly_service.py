@@ -206,7 +206,8 @@ def compute_risk(req: AccessRequest) -> AnomalyResponse:
 def health():
     is_healthy = scaler is not None and iso_forest is not None
     return {
-        "status": "UP" if is_healthy else "UNHEALTHY",
+        "status": "healthy" if is_healthy else "UNHEALTHY",
+        "service_status": "UP" if is_healthy else "DOWN",
         "models_loaded": is_healthy,
         "service": "MedChain Sentinel AI Microservice",
         "version": version_meta.get("version", "v1.2.0"),

@@ -60,7 +60,8 @@ public class BlockchainService {
     private RawTransactionManager txManager;
     private boolean available = false;
 
-    private static final long CHAIN_ID = 31337L;
+    @Value("${blockchain.chain.id:31337}")
+    private long chainId;
 
     private static final String FN_REGISTER_PSEUDONYM  = "0x" + keccak256Selector("registerPseudonym(bytes32,bytes32)");
     private static final String FN_UPLOAD_RECORD       = "0x" + keccak256Selector("uploadRecord(bytes32,bytes32,bytes32,bytes32)");
@@ -77,7 +78,7 @@ public class BlockchainService {
         try {
             web3j = Web3j.build(new HttpService(rpcUrl));
             credentials = Credentials.create(privateKey);
-            txManager = new RawTransactionManager(web3j, credentials, CHAIN_ID);
+            txManager = new RawTransactionManager(web3j, credentials, chainId);
             String clientVersion = web3j.web3ClientVersion().sendAsync().get(3, java.util.concurrent.TimeUnit.SECONDS).getWeb3ClientVersion();
             available = true;
             log.info("Local EVM Hardhat node connected: {} | Contract: {}", clientVersion, contractAddress);

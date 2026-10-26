@@ -36,7 +36,7 @@ public class EmailService {
             mailSender.send(message);
             log.info("Successfully dispatched OTP email to {} via SMTP", toEmail);
         } catch (Exception e) {
-            log.warn("SMTP server unreachable at port 1025 ({}). Logged OTP code for local development: [{}]", e.getMessage(), otp);
+            log.warn("SMTP server unreachable ({}). OTP dispatch failed to complete over wire.", e.getMessage());
             // Allow registration to proceed smoothly even if local SMTP daemon is offline
         }
     }

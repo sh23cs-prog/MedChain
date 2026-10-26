@@ -1,7 +1,16 @@
 # Java
 backend/target/
 backend/uploads/
+backend/data/
 uploads/
+*.mv.db
+*.trace.db
+
+# Deployment & Logs
+*pids.txt
+deploy_log.txt
+script_output*.txt
+*.log
 
 # Node
 frontend/node_modules/
@@ -17,11 +26,13 @@ blockchain/deployed.json
 ml/models/*.pkl
 scratch.js
 
-# Env
+# Env & Secrets
 .env
 .env.local
 .env.*.local
 backend/.env
+*.pem
+*.key
 
 # IDE
 .idea/

@@ -4,10 +4,10 @@ spring:
       on-profile: prod
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/medchaindb}
+    url: ${SPRING_DATASOURCE_URL:${DATABASE_URL:jdbc:postgresql://postgres:5432/medchaindb}}
     driver-class-name: org.postgresql.Driver
-    username: ${SPRING_DATASOURCE_USERNAME:medchain}
-    password: ${SPRING_DATASOURCE_PASSWORD:medchain_prod_password}
+    username: ${SPRING_DATASOURCE_USERNAME:${DATABASE_USER:medchain}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DATABASE_PASSWORD:medchain_prod_password}}
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
