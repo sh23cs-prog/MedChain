@@ -63,6 +63,10 @@ def load_artifacts():
         logger.error("Failed to load model artifacts: %s", e)
 
 
+# Eagerly load model artifacts on module import
+load_artifacts()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_artifacts()
