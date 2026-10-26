@@ -66,15 +66,14 @@ public class AuthService {
         }
 
         // Generate and send 6-digit OTP
-        String rawOtp = otpService.generateAndSendOtp(saved.getEmail(), "REGISTRATION");
+        otpService.generateAndSendOtp(saved.getEmail(), "REGISTRATION");
 
         logAudit(saved.getId(), saved.getName(), saved.getPseudonymId(), "REGISTER", true, null);
         logAudit(saved.getId(), saved.getName(), saved.getPseudonymId(), "OTP_REQUEST", true, null);
 
         AuthResponse res = buildResponse(saved, null);
         res.setToken(null); // No token returned until OTP is verified
-        res.setOtpPreview(rawOtp);
-        res.setMessage("Account created successfully. Your 6-digit verification code is: " + rawOtp);
+        res.setMessage("Account registered successfully. A 6-digit verification code has been sent to your email.");
         return res;
     }
 
@@ -114,9 +113,9 @@ public class AuthService {
 
         if (!user.isEmailVerified()) {
             // Re-send OTP for verification
-            String rawOtp = otpService.generateAndSendOtp(user.getEmail(), "REGISTRATION");
+            otpService.generateAndSendOtp(user.getEmail(), "REGISTRATION");
             logAudit(user.getId(), user.getName(), user.getPseudonymId(), "LOGIN_FAILED", false, "Email unverified — OTP re-sent");
-            throw new MedChainException("Email not verified. A fresh OTP code has been generated: " + rawOtp);
+            throw new MedChainException("Email not verified. A fresh verification code has been dispatched to your email.");
         }
 
         if (!passwordEncoder.matches(req.getPassword(), user.getPassword())) {
@@ -130,21 +129,19 @@ public class AuthService {
         return buildResponse(user, token);
     }
 
-    public String resendOtp(String email, String type) {
+    public void resendOtp(String email, String type) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new MedChainException("User not found with email: " + email));
-        String rawOtp = otpService.generateAndSendOtp(user.getEmail(), type != null ? type : "REGISTRATION");
+        otpService.generateAndSendOtp(user.getEmail(), type != null ? type : "REGISTRATION");
         logAudit(user.getId(), user.getName(), user.getPseudonymId(), "OTP_REQUEST", true, "OTP resent via email");
-        return rawOtp;
     }
 
-    public String forgotPassword(ForgotPasswordRequest req) {
+    public void forgotPassword(ForgotPasswordRequest req) {
         User user = userRepository.findByEmail(req.getEmail())
                 .orElseThrow(() -> new MedChainException("User not found with email: " + req.getEmail()));
 
-        String rawOtp = otpService.generateAndSendOtp(user.getEmail(), "PASSWORD_RESET");
+        otpService.generateAndSendOtp(user.getEmail(), "PASSWORD_RESET");
         logAudit(user.getId(), user.getName(), user.getPseudonymId(), "OTP_REQUEST", true, "Password reset OTP requested");
-        return rawOtp;
     }
 
     public void resetPassword(ResetPasswordRequest req) {

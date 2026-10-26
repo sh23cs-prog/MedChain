@@ -36,11 +36,9 @@ spring:
           starttls:
             enable: true
             required: true
-          connectiontimeout: 3000
-          timeout: 3000
-          writetimeout: 3000
-
-spring.mail.enabled: ${SPRING_MAIL_ENABLED:false}
+          connectiontimeout: 15000
+          timeout: 15000
+          writetimeout: 15000
 
 resend:
   api:

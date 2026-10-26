@@ -38,11 +38,8 @@ public class AuthController {
     public ResponseEntity<Map<String, String>> resendOtp(
             @RequestParam("email") String email,
             @RequestParam(value = "type", defaultValue = "REGISTRATION") String type) {
-        String rawOtp = authService.resendOtp(email, type);
-        return ResponseEntity.ok(Map.of(
-                "message", "A fresh OTP code has been dispatched. (Code: " + rawOtp + ")",
-                "otpCode", rawOtp
-        ));
+        authService.resendOtp(email, type);
+        return ResponseEntity.ok(Map.of("message", "A fresh OTP code has been sent to your email."));
     }
 
     @PostMapping("/login")
@@ -61,11 +58,8 @@ public class AuthController {
     @PostMapping("/forgot-password")
     @Operation(summary = "Request password reset OTP via email")
     public ResponseEntity<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest req) {
-        String rawOtp = authService.forgotPassword(req);
-        return ResponseEntity.ok(Map.of(
-                "message", "Password reset OTP sent successfully. (Code: " + rawOtp + ")",
-                "otpCode", rawOtp
-        ));
+        authService.forgotPassword(req);
+        return ResponseEntity.ok(Map.of("message", "Password reset OTP sent to email successfully."));
     }
 
     @PostMapping("/reset-password")

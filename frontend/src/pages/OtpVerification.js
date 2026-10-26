@@ -20,16 +20,13 @@ export default function OtpVerification() {
 
   const initialEmail = location.state?.email || '';
   const initialType = location.state?.type || 'REGISTRATION';
-  const initialOtp = location.state?.otp || '';
 
   const [email, setEmail] = useState(initialEmail);
-  const [otp, setOtp] = useState(initialOtp);
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(
-    initialOtp ? `Security verification code: ${initialOtp}` : ''
-  );
+  const [success, setSuccess] = useState('');
 
   const handleVerify = async (e) => {
     e.preventDefault();
@@ -54,13 +51,7 @@ export default function OtpVerification() {
     setResending(true);
     try {
       const res = await authService.resendOtp(email);
-      const code = res.data?.otpCode;
-      if (code) {
-        setOtp(code);
-        setSuccess(`A fresh OTP code has been generated: ${code}`);
-      } else {
-        setSuccess(res.data?.message || 'A fresh 6-digit OTP code has been dispatched to your email address.');
-      }
+      setSuccess(res.data?.message || 'A fresh 6-digit OTP code has been dispatched to your email address.');
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Failed to resend OTP.');
     } finally {

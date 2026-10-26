@@ -36,8 +36,6 @@ services:
         sync: false
       - key: SPRING_MAIL_FROM
         sync: false
-      - key: SPRING_MAIL_ENABLED
-        value: "false"
       - key: RESEND_API_KEY
         sync: false
 

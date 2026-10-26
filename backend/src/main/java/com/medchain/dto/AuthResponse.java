@@ -14,6 +14,5 @@ public class AuthResponse {
     private Map<String, String> attributes;
     private boolean active;
     private boolean blocked;
-    private String otpPreview;
     private String message;
 }

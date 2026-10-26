@@ -61,10 +61,9 @@ export default function Register() {
     };
 
     try {
-      const res = await authService.register(payload);
+      await authService.register(payload);
       setSuccess(true);
-      const otpCode = res.data?.otpPreview || res.data?.otp;
-      setTimeout(() => navigate('/verify-otp', { state: { email: formData.email, type: 'REGISTRATION', otp: otpCode } }), 1000);
+      setTimeout(() => navigate('/verify-otp', { state: { email: formData.email, type: 'REGISTRATION' } }), 1000);
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Registration failed.');
     } finally {

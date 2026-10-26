@@ -22,7 +22,11 @@ public class OtpService {
     private final EmailService emailService;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public String generateAndSendOtp(String email, String type) {
+    public void generateAndSendOtp(String email, String type) {
+        if (email == null || email.isBlank()) {
+            throw new MedChainException("Email address cannot be empty.");
+        }
+
         // Check for resend cooldown (60 seconds)
         Optional<OtpToken> latestTokenOpt = otpTokenRepository
                 .findTopByEmailAndTypeAndUsedFalseOrderByCreatedAtDesc(email, type);
@@ -52,22 +56,13 @@ public class OtpService {
         token.setLastResentAt(LocalDateTime.now());
         token.setCreatedAt(LocalDateTime.now());
 
+        // Dispatch via email service. If email dispatch fails, this throws MedChainException
+        // and aborts the flow so the client receives a proper error.
+        emailService.sendOtpEmail(email, rawOtp, type);
+
+        // Save token to DB only after successful email dispatch
         otpTokenRepository.save(token);
-        log.info("Saved hashed OTP for {} (type={}). Dispatching email...", email, type);
-
-        // Dispatch via email service (Resend HTTP / SMTP / Fallback)
-        try {
-            boolean sent = emailService.sendOtpEmail(email, rawOtp, type);
-            if (sent) {
-                log.info("OTP dispatched successfully via email to {}", email);
-            } else {
-                log.info("OTP code generated for {} (fallback in-app delivery): [Code={}]", email, rawOtp);
-            }
-        } catch (Exception e) {
-            log.warn("Non-fatal email dispatch error for {}: {}", email, e.getMessage());
-        }
-
-        return rawOtp;
+        log.info("Security OTP token generated and dispatched successfully for recipient [{}] (type={})", maskEmail(email), type);
     }
 
     public void verifyOtp(String email, String rawOtp, String type) {
@@ -101,6 +96,13 @@ public class OtpService {
         // Verification successful — mark single-use
         token.setUsed(true);
         otpTokenRepository.save(token);
-        log.info("OTP verification successful for {} (type={})", email, type);
+        log.info("OTP verification successful for recipient [{}] (type={})", maskEmail(email), type);
+    }
+
+    private String maskEmail(String email) {
+        if (email == null || email.isBlank()) return "unknown";
+        int atIdx = email.indexOf('@');
+        if (atIdx <= 2) return "***" + email.substring(Math.max(0, atIdx));
+        return email.substring(0, 2) + "***" + email.substring(atIdx);
     }
 }
