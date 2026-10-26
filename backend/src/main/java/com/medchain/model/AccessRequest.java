@@ -35,7 +35,6 @@ public class AccessRequest {
     @Column(nullable = false)
     private String status; // PENDING, APPROVED, REJECTED, REVOKED, EXPIRED
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String reason;
 

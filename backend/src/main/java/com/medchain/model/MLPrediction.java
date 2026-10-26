@@ -31,7 +31,6 @@ public class MLPrediction {
     private String modelVersion = "v1.1.0";
     private boolean anomaly;
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String explainableReportJson;
 

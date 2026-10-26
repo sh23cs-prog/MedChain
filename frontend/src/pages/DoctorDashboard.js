@@ -74,6 +74,7 @@ export default function DoctorDashboard() {
   const [allPatientRecords, setAllPatientRecords] = useState([]);
   const [selectedPatientId, setSelectedPatientId] = useState('');
   const [notification, setNotification] = useState(null);
+  const [doctorError, setDoctorError] = useState(null);
 
   useEffect(() => {
     fetchDoctorData();
@@ -82,15 +83,28 @@ export default function DoctorDashboard() {
   const fetchDoctorData = async () => {
     if (!user) return;
     setLoading(true);
+    setDoctorError(null);
     try {
-      const [authRes, patRes] = await Promise.all([
+      const [authRes, patRes] = await Promise.allSettled([
         recordService.getDoctorRecords(),
         recordService.getPatients(),
       ]);
-      setAuthorizedRecords(authRes.data || []);
-      setPatients(patRes.data || []);
+
+      if (authRes.status === 'fulfilled') {
+        setAuthorizedRecords(authRes.value.data || []);
+      } else {
+        const errMsg = authRes.reason?.response?.data?.message || authRes.reason?.message || 'Failed to load authorized records';
+        setDoctorError(errMsg);
+        showNotification(errMsg, 'error');
+      }
+
+      if (patRes.status === 'fulfilled') {
+        setPatients(patRes.value.data || []);
+      }
     } catch (err) {
-      showNotification('Failed to load doctor dashboard', 'error');
+      const msg = err.response?.data?.message || err.message || 'Failed to load doctor dashboard';
+      setDoctorError(msg);
+      showNotification(msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -286,6 +300,20 @@ export default function DoctorDashboard() {
 
           {loading ? (
             <SkeletonCard />
+          ) : doctorError ? (
+            <Box py={4}>
+              <Alert
+                severity="error"
+                action={
+                  <Button color="inherit" size="small" onClick={fetchDoctorData}>
+                    Retry
+                  </Button>
+                }
+                sx={{ borderRadius: 2 }}
+              >
+                {doctorError}
+              </Alert>
+            </Box>
           ) : (
             <>
               <TableContainer>

@@ -83,6 +83,7 @@ export default function PatientDashboard() {
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [confirmState, setConfirmState] = useState({ open: false, action: null, doctorId: null });
+  const [dashboardError, setDashboardError] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -91,19 +92,36 @@ export default function PatientDashboard() {
   const fetchDashboardData = async () => {
     if (!user) return;
     setLoading(true);
+    setDashboardError(null);
     try {
-      const [recRes, docRes, reqRes, alertRes] = await Promise.all([
+      const [recRes, docRes, reqRes, alertRes] = await Promise.allSettled([
         recordService.getPatientRecords(user.id),
         recordService.getDoctors(),
         recordService.getPatientRequests(),
         recordService.getPatientSecurityAlerts(),
       ]);
-      setRecords(recRes.data || []);
-      setDoctors(docRes.data || []);
-      setRequests(reqRes.data || []);
-      setSecurityAlerts(alertRes.data || []);
+
+      if (recRes.status === 'fulfilled') {
+        setRecords(recRes.value.data || []);
+      } else {
+        const errMsg = recRes.reason?.response?.data?.message || recRes.reason?.message || 'Failed to load medical records';
+        setDashboardError(errMsg);
+        showNotification(errMsg, 'error');
+      }
+
+      if (docRes.status === 'fulfilled') {
+        setDoctors(docRes.value.data || []);
+      }
+      if (reqRes.status === 'fulfilled') {
+        setRequests(reqRes.value.data || []);
+      }
+      if (alertRes.status === 'fulfilled') {
+        setSecurityAlerts(alertRes.value.data || []);
+      }
     } catch (err) {
-      showNotification('Failed to load dashboard data', 'error');
+      const msg = err.response?.data?.message || err.message || 'Failed to load dashboard data';
+      setDashboardError(msg);
+      showNotification(msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -357,6 +375,20 @@ export default function PatientDashboard() {
 
             {loading ? (
               <SkeletonCard rows={4} />
+            ) : dashboardError ? (
+              <Box py={4}>
+                <Alert
+                  severity="error"
+                  action={
+                    <Button color="inherit" size="small" onClick={fetchDashboardData}>
+                      Retry
+                    </Button>
+                  }
+                  sx={{ borderRadius: 2 }}
+                >
+                  {dashboardError}
+                </Alert>
+              </Box>
             ) : filteredRecords.length === 0 ? (
               <Box textAlign="center" py={6}>
                 <Typography variant="h6" color="text.secondary">No medical records uploaded yet</Typography>

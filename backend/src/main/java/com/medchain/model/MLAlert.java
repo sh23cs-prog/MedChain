@@ -33,7 +33,6 @@ public class MLAlert {
     private String riskLevel; // HIGH, CRITICAL
     private String status = "OPEN"; // OPEN, ACKNOWLEDGED, RESOLVED
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String rationale;
 

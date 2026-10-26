@@ -17,19 +17,31 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: update
+    properties:
+      hibernate:
+        jdbc:
+          lob:
+            non_contextual_creation: true
     show-sql: false
 
   mail:
-    host: ${SPRING_MAIL_HOST:smtp.gmail.com}
-    port: ${SPRING_MAIL_PORT:587}
-    username: ${SPRING_MAIL_USERNAME:}
-    password: ${SPRING_MAIL_PASSWORD:}
+    host: ${SPRING_MAIL_HOST:${SMTP_HOST:${MAIL_HOST:smtp.gmail.com}}}
+    port: ${SPRING_MAIL_PORT:${SMTP_PORT:${MAIL_PORT:587}}}
+    username: ${SPRING_MAIL_USERNAME:${SMTP_USERNAME:${MAIL_USERNAME:}}}
+    password: ${SPRING_MAIL_PASSWORD:${SMTP_PASSWORD:${MAIL_PASSWORD:}}}
     properties:
       mail:
         smtp:
           auth: true
           starttls:
             enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+mail:
+  from: ${SPRING_MAIL_FROM:${SMTP_FROM:${MAIL_FROM:}}}
 
 ml:
   service:

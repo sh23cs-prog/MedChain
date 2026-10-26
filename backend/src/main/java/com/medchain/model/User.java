@@ -43,7 +43,6 @@ public class User {
 
     private String publicKey;
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String encryptedPrivateKey;
 

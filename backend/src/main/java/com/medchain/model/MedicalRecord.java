@@ -35,7 +35,6 @@ public class MedicalRecord {
     @Column(nullable = false)
     private String title;
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String description;
 
@@ -57,11 +56,9 @@ public class MedicalRecord {
     private String ipfsCid;
 
     // ─── AES-256-GCM Encryption ───────────────────────────────────────────────
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String encryptedContent; // Base64 AES-GCM ciphertext
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String encryptedAesKey; // CP-ABE / PRE encrypted key
 

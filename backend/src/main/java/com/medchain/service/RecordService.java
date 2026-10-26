@@ -8,6 +8,7 @@ import com.medchain.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
@@ -19,6 +20,7 @@ import java.util.Optional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class RecordService {
 
     private final MedicalRecordRepository recordRepository;
@@ -39,6 +41,7 @@ public class RecordService {
 
     // ─── Real File Upload ─────────────────────────────────────────────────────
 
+    @Transactional
     public MedicalRecord uploadMultipartFile(MultipartFile file, String title, String description,
                                              String recordType, String patientEmail, String ipAddress) {
         User patient = userRepository.findByEmail(patientEmail)
@@ -103,6 +106,7 @@ public class RecordService {
         return saved;
     }
 
+    @Transactional
     public MedicalRecord uploadRecord(RecordUploadRequest req, String patientEmail, String ipAddress) {
         User patient = userRepository.findByEmail(patientEmail)
                 .orElseThrow(() -> new MedChainException("Patient not found"));
@@ -217,13 +221,19 @@ public class RecordService {
         MLService.AnomalyRequest telemetryReq = mlService.buildTelemetry(requester, record);
         MLService.AnomalyResponse mlRes = mlService.scoreAccess(telemetryReq, requester.getId(), recordId);
 
-        // 2. Read Encrypted Ciphertext Payload
-        byte[] ciphertext;
+        // 2. Read Encrypted Ciphertext Payload (Disk cache with database persistent fallback)
+        byte[] ciphertext = null;
         if (record.getStoragePath() != null && !record.getStoragePath().isBlank()) {
             ciphertext = fileStorageService.readEncryptedFile(record.getStoragePath());
-        } else if (record.getEncryptedContent() != null && !record.getEncryptedContent().isBlank()) {
-            ciphertext = Base64.getDecoder().decode(record.getEncryptedContent());
-        } else {
+        }
+        if (ciphertext == null && record.getEncryptedContent() != null && !record.getEncryptedContent().isBlank()) {
+            try {
+                ciphertext = Base64.getDecoder().decode(record.getEncryptedContent());
+            } catch (Exception e) {
+                log.warn("Failed to decode base64 encryptedContent for record {}: {}", recordId, e.getMessage());
+            }
+        }
+        if (ciphertext == null || ciphertext.length == 0) {
             throw new MedChainException("No encrypted payload found for this medical record.");
         }
 
@@ -323,12 +333,18 @@ public class RecordService {
             throw new MedChainException("Access denied: You do not have active patient approval to download this record.");
         }
 
-        byte[] ciphertext;
+        byte[] ciphertext = null;
         if (record.getStoragePath() != null && !record.getStoragePath().isBlank()) {
             ciphertext = fileStorageService.readEncryptedFile(record.getStoragePath());
-        } else if (record.getEncryptedContent() != null && !record.getEncryptedContent().isBlank()) {
-            ciphertext = Base64.getDecoder().decode(record.getEncryptedContent());
-        } else {
+        }
+        if (ciphertext == null && record.getEncryptedContent() != null && !record.getEncryptedContent().isBlank()) {
+            try {
+                ciphertext = Base64.getDecoder().decode(record.getEncryptedContent());
+            } catch (Exception e) {
+                log.warn("Failed to decode base64 encryptedContent for download of record {}: {}", recordId, e.getMessage());
+            }
+        }
+        if (ciphertext == null || ciphertext.length == 0) {
             throw new MedChainException("No encrypted file stored for this record.");
         }
 
@@ -383,6 +399,7 @@ public class RecordService {
 
     // ─── Access Request & Grant/Revoke Methods ────────────────────────────────
 
+    @Transactional
     public AccessRequest requestAccess(String recordId, String doctorEmail) {
         User doctor = userRepository.findByEmail(doctorEmail)
                 .orElseThrow(() -> new MedChainException("Doctor not found"));
@@ -411,6 +428,7 @@ public class RecordService {
         return accessRequestRepository.findByPatientIdAndStatus(patient.getId(), "PENDING");
     }
 
+    @Transactional
     public AccessRequest denyAccessRequest(String requestId, String patientEmail) {
         User patient = userRepository.findByEmail(patientEmail)
                 .orElseThrow(() -> new MedChainException("Patient not found"));
@@ -425,6 +443,7 @@ public class RecordService {
         return accessRequestRepository.save(req);
     }
 
+    @Transactional
     public MedicalRecord grantAccess(String recordId, String doctorId, String patientEmail, String ipAddress) {
         User patient = userRepository.findByEmail(patientEmail)
                 .orElseThrow(() -> new MedChainException("Patient not found"));
@@ -487,6 +506,7 @@ public class RecordService {
         return saved;
     }
 
+    @Transactional
     public MedicalRecord revokeAccess(String recordId, String doctorId, String patientEmail, String ipAddress) {
         User patient = userRepository.findByEmail(patientEmail)
                 .orElseThrow(() -> new MedChainException("Patient not found"));

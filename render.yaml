@@ -26,6 +26,16 @@ services:
         value: "https://med-chain-amber.vercel.app,https://*.vercel.app,http://localhost:3000"
       - key: BLOCKCHAIN_ENABLED
         value: "false"
+      - key: SPRING_MAIL_HOST
+        value: smtp.gmail.com
+      - key: SPRING_MAIL_PORT
+        value: "587"
+      - key: SPRING_MAIL_USERNAME
+        sync: false
+      - key: SPRING_MAIL_PASSWORD
+        sync: false
+      - key: SPRING_MAIL_FROM
+        sync: false
 
   # ─── 2. Sentinel AI FastAPI Microservice ──────────────────────────────────────
   - type: web

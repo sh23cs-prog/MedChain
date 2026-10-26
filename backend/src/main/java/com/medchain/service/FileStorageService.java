@@ -40,14 +40,18 @@ public class FileStorageService {
 
     public byte[] readEncryptedFile(String storagePathStr) {
         try {
+            if (storagePathStr == null || storagePathStr.isBlank()) {
+                return null;
+            }
             Path path = Paths.get(storagePathStr).toAbsolutePath().normalize();
             if (!Files.exists(path) || !Files.isReadable(path)) {
-                throw new MedChainException("Encrypted storage payload file not found or inaccessible.");
+                log.info("Storage file not found on disk at: {}. Will fall back to persistent database payload.", storagePathStr);
+                return null;
             }
             return Files.readAllBytes(path);
-        } catch (IOException e) {
-            log.error("Failed to read encrypted file payload from {}: {}", storagePathStr, e.getMessage(), e);
-            throw new MedChainException("Failed to read encrypted file payload from storage: " + e.getMessage());
+        } catch (Exception e) {
+            log.warn("Failed to read storage file {}: {}. Falling back to persistent database payload.", storagePathStr, e.getMessage());
+            return null;
         }
     }
 }

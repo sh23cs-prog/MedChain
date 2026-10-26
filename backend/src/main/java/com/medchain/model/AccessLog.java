@@ -44,7 +44,6 @@ public class AccessLog {
 
     private boolean granted;
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String denyReason;
 

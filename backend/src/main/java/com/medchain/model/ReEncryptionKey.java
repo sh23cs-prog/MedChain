@@ -28,11 +28,9 @@ public class ReEncryptionKey {
 
     private String doctorPID;
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String tempKey;
 
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String encryptedAesKey;
 
