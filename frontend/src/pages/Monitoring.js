@@ -176,19 +176,19 @@ export default function Monitoring() {
               <ServiceCard name="Spring Boot Backend" desc="Port 8080 • REST API & Security" status={metrics?.services?.backend ?? true} />
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
-              <ServiceCard name="MongoDB 7.0 Database" desc="Port 27017 • Off-Chain Data Store" status={metrics?.services?.mongodb ?? true} />
+              <ServiceCard name="PostgreSQL Database" desc="Port 5432 • Persistent Cloud Store" status={metrics?.services?.database ?? true} />
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
-              <ServiceCard name="FastAPI ML Service" desc="Port 8000 • Isolation Forest" status={metrics?.services?.ml ?? true} />
+              <ServiceCard name="FastAPI ML Service" desc="Sentinel AI • Isolation Forest Engine" status={metrics?.services?.ml ?? true} />
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
-              <ServiceCard name="Hardhat Ethereum Node" desc="Port 8545 • EVM Smart Contracts" status={metrics?.services?.blockchain ?? true} />
+              <ServiceCard name="Ethereum Blockchain Ledger" desc="EVM Smart Contracts • Audit Anchoring" status={metrics?.services?.blockchain ?? true} />
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
-              <ServiceCard name="AES-256-GCM Off-Chain Store" desc="Local Encrypted Payload Storage" status={metrics?.services?.database ?? true} />
+              <ServiceCard name="AES-256-GCM Off-Chain Store" desc="Authenticated Ciphertext Storage" status={metrics?.services?.database ?? true} />
             </Grid>
             <Grid item xs={12} sm={6} md={4}>
-              <ServiceCard name="React Frontend SPA" desc="Port 3000 • Material-UI Dashboard" status={true} />
+              <ServiceCard name="React Frontend SPA" desc="Vercel Cloud • Material-UI Dashboard" status={true} />
             </Grid>
           </Grid>
         </Paper>
