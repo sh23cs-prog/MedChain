@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MedChain — Final Project Presentation Deck</title>
+  <style>
+    :root {
+      --primary: #1976D2;
+      --primary-dark: #0D47A1;
+      --secondary: #00897B;
+      --background: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-red: #ef4444;
+      --accent-green: #10b981;
+      --accent-amber: #f59e0b;
+      --border: #334155;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+
+    body {
+      background-color: var(--background);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      background-color: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(8px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    .slide-counter {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: #0f172a;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      border: 1px solid var(--border);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      overflow: hidden;
+    }
+
+    .slide {
+      display: none;
+      width: 100%;
+      max-width: 1100px;
+      max-height: 85vh;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px 48px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+      overflow-y: auto;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    .slide.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    h1 { font-size: 2.4rem; color: #38bdf8; margin-bottom: 8px; line-height: 1.2; }
+    h2 { font-size: 1.8rem; color: #38bdf8; margin-bottom: 20px; border-bottom: 2px solid var(--border); padding-bottom: 10px; }
+    h3 { font-size: 1.2rem; color: var(--secondary); margin: 16px 0 8px 0; }
+    p { font-size: 1.05rem; line-height: 1.6; color: var(--text); margin-bottom: 16px; }
+
+    ul { margin-left: 24px; margin-bottom: 16px; }
+    li { font-size: 1.05rem; line-height: 1.7; margin-bottom: 8px; color: #cbd5e1; }
+    li strong { color: #f8fafc; }
+
+    .tag {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      margin-right: 6px;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 16px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; }
+
+    .card {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .card h4 { color: #38bdf8; margin-bottom: 8px; font-size: 1.1rem; }
+    .card p { font-size: 0.95rem; color: #94a3b8; margin: 0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.95rem;
+    }
+
+    th, td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      background: #0f172a;
+      color: #38bdf8;
+      font-weight: 600;
+    }
+
+    tr:hover { background: rgba(255, 255, 255, 0.02); }
+
+    pre {
+      background: #0f172a;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-family: monospace;
+      font-size: 0.9rem;
+      overflow-x: auto;
+      color: #38bdf8;
+      line-height: 1.5;
+    }
+
+    footer {
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+      background: rgba(30, 41, 59, 0.7);
+    }
+
+    .nav-btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+
+    .nav-btn:hover { background: var(--primary-dark); }
+    .nav-btn:disabled { background: #475569; cursor: not-allowed; opacity: 0.5; }
+
+    .help-hint {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      <span>MedChain — Final Project Defense</span>
+    </div>
+    <div class="slide-counter" id="slideIndicator">Slide 1 / 15</div>
+  </header>
+
+  <main>
+
+    <!-- Slide 1 -->
+    <div class="slide active">
+      <div style="text-align: center; padding: 40px 0;">
+        <span class="tag">Final Year Project 2026</span>
+        <h1 style="font-size: 2.8rem; margin: 16px 0;">MedChain</h1>
+        <p style="font-size: 1.4rem; color: #38bdf8; font-weight: 500;">A Blockchain-Aided Privacy-Preserving Medical Data Sharing Scheme with AI Threat Detection</p>
+        <p style="color: var(--text-muted); max-width: 700px; margin: 20px auto;">Department of Computer Science & Engineering • CMR Institute of Technology</p>
+        <div style="display: flex; justify-content: center; gap: 12px; margin-top: 30px;">
+          <span class="tag">Zero-Trust Healthcare</span>
+          <span class="tag">CP-ABE & AES-256</span>
+          <span class="tag">EVM Smart Contracts</span>
+          <span class="tag">Sentinel AI (Isolation Forest)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 2 -->
+    <div class="slide">
+      <h2>1. Introduction & Background</h2>
+      <p>Modern electronic healthcare systems rely heavily on digital health records, yet sharing medical records across institutions remains fraught with peril:</p>
+      <div class="grid-2">
+        <div class="card">
+          <h4>🏥 The Medical Sharing Dilemma</h4>
+          <p>Hospitals operate isolated databases. Transferring records requires unsecured email attachments, paper printouts, or manual faxing, creating massive clinical delays and diagnostic redundancy.</p>
+        </div>
+        <div class="card">
+          <h4>⚖️ Stringent Compliance Mandates</h4>
+          <p>Regulations like <strong>HIPAA</strong> and <strong>GDPR</strong> require patient consent, strict access auditing, cryptographic confidentiality, and non-repudiation with severe financial penalties for breaches.</p>
+        </div>
+      </div>
+      <div style="margin-top: 24px;">
+        <h3>The MedChain Paradigm</h3>
+        <p>A decentralized platform where <strong>patients own their encryption keys and define access policies</strong>, doctors access clinical records under attribute validation, and <strong>AI continuously monitors access behavior</strong> to preempt insider threats.</p>
+      </div>
+    </div>
+
+    <!-- Slide 3 -->
+    <div class="slide">
+      <h2>2. Problem Statement</h2>
+      <p>Existing electronic healthcare systems suffer from four fundamental architectural flaws:</p>
+      <div class="grid-2">
+        <div class="card">
+          <h4>1. Centralized Single Point of Failure</h4>
+          <p>Central hospital databases are prime targets for ransomware, administrative tampering, and catastrophic downtime.</p>
+        </div>
+        <div class="card">
+          <h4>2. Lack of Patient Ownership</h4>
+          <p>Patients have no real-time transparency or control over which medical staff view or share their private health data.</p>
+        </div>
+        <div class="card">
+          <h4>3. Insider Threat Vulnerability</h4>
+          <p>Compromised credentials or rogue staff can harvest thousands of patient histories without triggering static rule alarms.</p>
+        </div>
+        <div class="card">
+          <h4>4. Public Ledger Privacy Risks</h4>
+          <p>Naive blockchain deployments expose real patient identities and wallet addresses, violating identity confidentiality.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 4 -->
+    <div class="slide">
+      <h2>3. Project Objectives</h2>
+      <ul>
+        <li><strong>Patient-Centric Access Control</strong>: Implement fine-grained Ciphertext-Policy Attribute-Based Encryption (CP-ABE) allowing patients to specify criteria like <code>(specialty=Cardiology AND hospital=CityHospital)</code>.</li>
+        <li><strong>Authenticated Data Confidentiality</strong>: Guarantee off-chain storage security via AES-256-GCM authenticated encryption paired with SHA-256 integrity checks.</li>
+        <li><strong>Identity Pseudonymization</strong>: Completely decouple patient identity from blockchain transactions using Keccak-256 pseudonyms (PIDs) and blinding nonces.</li>
+        <li><strong>Immutable Non-Repudiable Auditing</strong>: Record every record upload, policy change, doctor authorization, and decryption event on an EVM smart contract ledger.</li>
+        <li><strong>Real-Time Threat Detection</strong>: Deploy an AI microservice (Isolation Forest) evaluating 8 clinical telemetry features in under 15ms to detect anomalies.</li>
+      </ul>
+    </div>
+
+    <!-- Slide 5 -->
+    <div class="slide">
+      <h2>4. Existing vs. Proposed System</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Security & Architectural Dimension</th>
+            <th>Existing Hospital EHR Systems</th>
+            <th>Proposed MedChain Solution</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Data Ownership</strong></td>
+            <td>Hospital owns centralized database</td>
+            <td>Patient-centric cryptographic ownership</td>
+          </tr>
+          <tr>
+            <td><strong>Encryption Architecture</strong></td>
+            <td>Storage-at-rest only; DB admins have raw access</td>
+            <td>End-to-End AES-256-GCM + CP-ABE (Zero Trust)</td>
+          </tr>
+          <tr>
+            <td><strong>Access Control Mechanism</strong></td>
+            <td>Static Role-Based Access Control (RBAC)</td>
+            <td>Dynamic Attribute-Based Access Control (ABAC)</td>
+          </tr>
+          <tr>
+            <td><strong>Audit Trail Verification</strong></td>
+            <td>Mutable, internal server logs</td>
+            <td>Immutable Solidity smart contracts on EVM</td>
+          </tr>
+          <tr>
+            <td><strong>Identity Privacy</strong></td>
+            <td>Real patient IDs exposed across logs</td>
+            <td>Asymmetric Keccak-256 Pseudonyms (PIDs)</td>
+          </tr>
+          <tr>
+            <td><strong>Threat Detection</strong></td>
+            <td>Post-incident manual log inspection</td>
+            <td>Real-time Sentinel AI scoring (&lt;15ms)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Slide 6 -->
+    <div class="slide">
+      <h2>5. Proposed System Architecture</h2>
+      <pre>
+┌────────────────────────────────────────────────────────────────────────┐
+│  PRESENTATION LAYER: React 18 + Material-UI v5 (Port 3000)             │
+│  Patient Portal · Doctor Portal · Admin Dashboard · Monitoring        │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ HTTPS + Reverse Proxy
+┌───────────────────────────────────▼────────────────────────────────────┐
+│  CORE APPLICATION LAYER: Spring Boot 3.5.3 (Java 17, Port 8080)        │
+│  Security Gateway · AES-256-GCM · CP-ABE Parser · Resend/Brevo/SMTP    │
+└────────┬──────────────────────────┬───────────────────────────┬────────┘
+         │                          │                           │
+  ┌──────▼──────┐            ┌──────▼──────┐             ┌──────▼──────┐
+  │ PostgreSQL  │            │ Sentinel AI │             │ Hardhat EVM │
+  │ Database 16 │            │ FastAPI ML  │             │ Blockchain  │
+  │ (Port 5432) │            │ (Port 8000) │             │ (Port 8545) │
+  └─────────────┘            └─────────────┘             └─────────────┘
+      </pre>
+    </div>
+
+    <!-- Slide 7 -->
+    <div class="slide">
+      <h2>6. Technology Stack</h2>
+      <div class="grid-3">
+        <div class="card">
+          <h4>Frontend</h4>
+          <ul>
+            <li>React 18 SPA</li>
+            <li>Material-UI (MUI v5)</li>
+            <li>Emotion Styled</li>
+            <li>Axios + Notistack</li>
+            <li>Recharts Data Viz</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>Backend & Storage</h4>
+          <ul>
+            <li>Spring Boot 3.5.3</li>
+            <li>Java 17 LTS</li>
+            <li>Spring Security 6 (JWT)</li>
+            <li>PostgreSQL 16</li>
+            <li>Spring Data JPA</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>AI & Blockchain</h4>
+          <ul>
+            <li>FastAPI (Python 3.11)</li>
+            <li>Scikit-Learn 1.9</li>
+            <li>Isolation Forest Model</li>
+            <li>Hardhat EVM (Node 18)</li>
+            <li>Solidity 0.8.20</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 8 -->
+    <div class="slide">
+      <h2>7. Module Description</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>1. Authentication & Identity</h4>
+          <p>Multi-factor registration with 6-digit BCrypt-hashed OTP via Resend & Brevo. Generates asymmetric keys and blinding nonce for Keccak-256 pseudonym (PID).</p>
+        </div>
+        <div class="card">
+          <h4>2. Patient Record Management</h4>
+          <p>Client-side file selection, automated AES-256-GCM encryption, policy definition, and proxy re-encryption key delegation to authorized doctors.</p>
+        </div>
+        <div class="card">
+          <h4>3. Doctor Clinical Access</h4>
+          <p>Query authorized medical records, request emergency access, and view decrypted records paired with real-time AI Risk Gauges.</p>
+        </div>
+        <div class="card">
+          <h4>4. Sentinel AI & Admin Oversight</h4>
+          <p>FastAPI threat detection evaluating access telemetry in &lt;15ms. Admin oversight dashboard with live system health and user management.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 9 -->
+    <div class="slide">
+      <h2>8. Security Architecture</h2>
+      <ul>
+        <li><strong>Authenticated Encryption (AES-256-GCM)</strong>: Encrypts files with 256-bit keys and 128-bit authentication tags, preventing ciphertext tampering.</li>
+        <li><strong>SHA-256 Pre-Decryption Integrity Check</strong>: Every record computes a SHA-256 digest on plaintext; decrypted files are verified against the stored hash before rendering.</li>
+        <li><strong>Cryptographic Pseudonymization</strong>:
+          <pre>PID = Keccak-256(Email || Nonce)</pre>
+          Real patient identities never touch the blockchain.
+        </li>
+        <li><strong>Proxy Re-Encryption (PRE)</strong>: The proxy transforms ciphertext from patient's public key to doctor's public key without ever decrypting or viewing plaintext.</li>
+      </ul>
+    </div>
+
+    <!-- Slide 10 -->
+    <div class="slide">
+      <h2>9. AI Threat Detection (Sentinel AI)</h2>
+      <p>Sentinel AI evaluates an 8-dimensional telemetry vector on every record access attempt:</p>
+      <div class="grid-2">
+        <div class="card">
+          <h4>8 Telemetry Features</h4>
+          <ul style="font-size: 0.95rem;">
+            <li><code>hour_of_day</code> (0-23)</li>
+            <li><code>day_of_week</code> (0-6)</li>
+            <li><code>records_per_hour</code> (velocity)</li>
+            <li><code>time_since_last</code> (burst rate)</li>
+            <li><code>specialty_match</code> (clinical alignment)</li>
+            <li><code>hospital_match</code> (locality)</li>
+            <li><code>access_freq_7d</code> (weekly load)</li>
+            <li><code>unique_patients_1h</code> (harvesting indicator)</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>Model Performance (CICIDS2017)</h4>
+          <p>Trained using Isolation Forest (150 trees, contamination=0.08):</p>
+          <ul style="font-size: 0.95rem; margin-top: 8px;">
+            <li><strong>Precision</strong>: 91.67%</li>
+            <li><strong>Recall (Sensitivity)</strong>: 99.00%</li>
+            <li><strong>F1-Score</strong>: 95.19%</li>
+            <li><strong>ROC-AUC</strong>: 99.84%</li>
+            <li><strong>Inference Latency</strong>: 12.4ms</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 11 -->
+    <div class="slide">
+      <h2>10. Implementation Workflows</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>Upload & Policy Workflow</h4>
+          <ol style="margin-left: 20px; line-height: 1.6; font-size: 0.95rem; color: #cbd5e1;">
+            <li>Patient selects medical record (PDF/PNG).</li>
+            <li>Spring Boot generates AES-256 key & 96-bit IV.</li>
+            <li>Payload encrypted; SHA-256 hash computed.</li>
+            <li>Encrypted bytes saved in PostgreSQL & disk.</li>
+            <li>Smart contract anchors hash on blockchain.</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h4>Access & Decryption Workflow</h4>
+          <ol style="margin-left: 20px; line-height: 1.6; font-size: 0.95rem; color: #cbd5e1;">
+            <li>Doctor requests record view.</li>
+            <li>ABAC evaluates doctor's attributes vs policy.</li>
+            <li>Sentinel AI evaluates access telemetry.</li>
+            <li>If risk score &lt; 0.75, AES payload decrypted.</li>
+            <li>AccessLog recorded with blockchain tx hash.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 12 -->
+    <div class="slide">
+      <h2>11. Testing & Verification</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Test Suite</th>
+            <th>Target Module</th>
+            <th>Tests</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>EmailServiceTest</code></td>
+            <td>Multi-Provider Resend / Brevo / SMTP</td>
+            <td>9</td>
+            <td><span class="tag" style="color: #10b981; border-color: #10b981;">100% PASS</span></td>
+          </tr>
+          <tr>
+            <td><code>AuthSecurityTest</code></td>
+            <td>Registration, OTP Cooldown, BCrypt, JWT</td>
+            <td>3</td>
+            <td><span class="tag" style="color: #10b981; border-color: #10b981;">100% PASS</span></td>
+          </tr>
+          <tr>
+            <td><code>DatabaseEntityTest</code></td>
+            <td>Relational JPA Schema & Constraints</td>
+            <td>4</td>
+            <td><span class="tag" style="color: #10b981; border-color: #10b981;">100% PASS</span></td>
+          </tr>
+          <tr>
+            <td><code>Sentinel AI Evaluate</code></td>
+            <td>Anomaly Detection Precision & Recall</td>
+            <td>1,100</td>
+            <td><span class="tag" style="color: #10b981; border-color: #10b981;">ROC-AUC 99.8%</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="margin-top: 20px; color: #10b981; font-weight: 600;">✓ Verified: All containers build and communicate via Docker Compose with zero external cloud dependencies.</p>
+    </div>
+
+    <!-- Slide 13 -->
+    <div class="slide">
+      <h2>12. Production Deployment</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>Live Production Cloud</h4>
+          <ul>
+            <li><strong>Frontend SPA</strong>: Vercel Edge Network<br/><a href="https://med-chain-amber.vercel.app" target="_blank" style="color: #38bdf8;">med-chain-amber.vercel.app</a></li>
+            <li><strong>Backend REST API</strong>: Render Web Service<br/><a href="https://medchain-backend-kgmq.onrender.com" target="_blank" style="color: #38bdf8;">medchain-backend-kgmq.onrender.com</a></li>
+            <li><strong>Sentinel AI</strong>: Render Web Service<br/><a href="https://medchain-sentinel-ml.onrender.com" target="_blank" style="color: #38bdf8;">medchain-sentinel-ml.onrender.com</a></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>Single-Command Docker Demo</h4>
+          <pre>
+# Copy environment template
+cp .env.example .env
+
+# Launch complete 5-container stack
+docker compose up --build
+          </pre>
+          <p style="margin-top: 8px;">Docker is the only required host prerequisite.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 14 -->
+    <div class="slide">
+      <h2>13. Limitations & Future Scope</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h4>Current Limitations</h4>
+          <ul>
+            <li>Resend/Brevo free tier sandbox limits email recipients until domain DNS verification is complete.</li>
+            <li>Local Hardhat node runs in-memory; public testnets require faucet token management.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>Future Enhancements</h4>
+          <ul>
+            <li><strong>Zero-Knowledge Proofs (ZKP)</strong>: Prove doctor qualification without exposing medical license details.</li>
+            <li><strong>Self-Sovereign Identity (SSI)</strong>: Integrate W3C Verifiable Credentials via MetaMask or Polygon ID.</li>
+            <li><strong>Federated Learning</strong>: Train Sentinel AI across multiple hospitals without sharing access logs.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Slide 15 -->
+    <div class="slide">
+      <div style="text-align: center; padding: 40px 0;">
+        <h1 style="color: #38bdf8; margin-bottom: 16px;">Conclusion</h1>
+        <p style="font-size: 1.25rem; max-width: 800px; margin: 0 auto 30px auto; color: #cbd5e1;">
+          MedChain proves that modern decentralized technologies, advanced cryptography, and real-time machine learning can converge to deliver a truly patient-centric, HIPAA-compliant electronic healthcare platform.
+        </p>
+        <div class="card" style="max-width: 600px; margin: 0 auto; text-align: left;">
+          <h4 style="text-align: center;">Project Resources & Repository</h4>
+          <p style="margin-top: 10px;"><strong>GitHub Repository</strong>: <a href="https://github.com/sh23cs-prog/MedChain" target="_blank" style="color: #38bdf8;">github.com/sh23cs-prog/MedChain</a></p>
+          <p><strong>Frontend Deployment</strong>: <a href="https://med-chain-amber.vercel.app" target="_blank" style="color: #38bdf8;">med-chain-amber.vercel.app</a></p>
+          <p><strong>Department</strong>: Computer Science & Engineering, CMRIT</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    <button class="nav-btn" id="prevBtn" onclick="changeSlide(-1)">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      Previous
+    </button>
+    <div class="help-hint">Tip: Use ◄ and ► Arrow Keys on Keyboard to Navigate</div>
+    <button class="nav-btn" id="nextBtn" onclick="changeSlide(1)">
+      Next
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+    </button>
+  </footer>
+
+  <script>
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+    const indicator = document.getElementById('slideIndicator');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+
+    function updateSlide() {
+      slides.forEach((slide, index) => {
+        slide.classList.toggle('active', index === currentSlide);
+      });
+      indicator.textContent = `Slide ${currentSlide + 1} / ${totalSlides}`;
+      prevBtn.disabled = currentSlide === 0;
+      nextBtn.disabled = currentSlide === totalSlides - 1;
+    }
+
+    function changeSlide(direction) {
+      currentSlide = Math.max(0, Math.min(totalSlides - 1, currentSlide + direction));
+      updateSlide();
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') {
+        changeSlide(1);
+      } else if (e.key === 'ArrowLeft') {
+        changeSlide(-1);
+      }
+    });
+
+    updateSlide();
+  </script>
+</body>
+</html>

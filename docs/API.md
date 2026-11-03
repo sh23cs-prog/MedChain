@@ -1,150 +1,221 @@
-# MedChain — Comprehensive API Specification
+# MedChain — Comprehensive REST API Specification
 
-## Base URL
-- **Local Development**: `http://localhost:8080/api`
-- **Docker Network**: `http://backend:8080/api`
-- **Swagger UI**: `http://localhost:8080/swagger-ui.html`
-- **OpenAPI JSON**: `http://localhost:8080/api-docs`
+## 1. Overview & Base URLs
+
+MedChain exposes a secure, documented RESTful API conforming to OpenAPI 3.0 standards:
+
+- **Local Docker Compose**: `http://localhost:8080/api`
+- **Reverse Proxy Route**: `http://localhost:3000/api`
+- **Production Backend**: `https://medchain-backend-kgmq.onrender.com/api`
+- **Interactive Swagger UI**: `http://localhost:8080/swagger-ui.html`
+- **OpenAPI Schema (JSON)**: `http://localhost:8080/api-docs`
+
+### Authentication Model
+Protected endpoints require an `Authorization` header containing a valid JSON Web Token (JWT) signed with HMAC-SHA256:
+```http
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
+```
 
 ---
 
-## 1. Authentication Endpoints
+## 2. Authentication Controller (`/api/auth`)
 
-### `POST /api/auth/login`
-Authenticate a user and issue a JWT token.
+| Endpoint | Method | Role | Summary |
+|---|---|---|---|
+| `/api/auth/register` | `POST` | Public | Register new Patient or Doctor account |
+| `/api/auth/verify-otp` | `POST` | Public | Verify 6-digit OTP code & issue JWT token |
+| `/api/auth/resend-otp` | `POST` | Public | Resend fresh OTP code (subject to 60s cooldown) |
+| `/api/auth/login` | `POST` | Public | Authenticate user credentials & issue JWT |
+| `/api/auth/forgot-password` | `POST` | Public | Request password reset OTP code |
+| `/api/auth/reset-password` | `POST` | Public | Reset password using verified OTP code |
+| `/api/auth/change-password` | `POST` | Authenticated | Change password for logged-in user |
+| `/api/auth/me` | `GET` | Authenticated | Retrieve authenticated user profile |
+| `/api/auth/logout` | `POST` | Authenticated | Invalidate JWT token via TokenBlacklistService |
 
-**Request Body**:
+### `POST /api/auth/register`
+**Request Payload**:
 ```json
 {
-  "email": "doctor@medchain.com",
-  "password": "doctor123"
+  "name": "Jane Doe",
+  "email": "jane.doe@example.com",
+  "password": "Password123!",
+  "role": "PATIENT",
+  "phone": "+1-555-0199",
+  "attributes": {}
 }
 ```
-
 **Response (200 OK)**:
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiJ9...",
-  "id": "65b...",
-  "name": "Dr. Robert Smith",
-  "email": "doctor@medchain.com",
-  "role": "DOCTOR",
-  "pseudonymId": "0x4f8a9b1c...",
-  "attributes": {
-    "specialty": "CARDIOLOGY",
-    "hospital": "City General Hospital"
-  }
+  "token": null,
+  "id": "b784ebc6-5a1b-4214-9343-7146b1720549",
+  "name": "Jane Doe",
+  "email": "jane.doe@example.com",
+  "role": "PATIENT",
+  "pseudonymId": "0x5bfcb45a6805d620328872f384c8345d9f6e1736a682664fe3555f92427674d0",
+  "active": true,
+  "blocked": false,
+  "message": "Account registered successfully. A 6-digit verification code has been sent to your email."
 }
 ```
 
-### `POST /api/auth/register`
-Register a new Patient or Doctor account.
-
-**Request Body**:
+### `POST /api/auth/verify-otp`
+**Request Payload**:
 ```json
 {
+  "email": "jane.doe@example.com",
+  "otp": "482910",
+  "type": "REGISTRATION"
+}
+```
+**Response (200 OK)**:
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "id": "b784ebc6-5a1b-4214-9343-7146b1720549",
+  "name": "Jane Doe",
+  "email": "jane.doe@example.com",
+  "role": "PATIENT",
+  "pseudonymId": "0x5bfcb45a6805d620328872f384c8345d9f6e1736a682664fe3555f92427674d0",
+  "message": "Email verified successfully."
+}
+```
+
+### `POST /api/auth/login`
+**Request Payload**:
+```json
+{
+  "email": "patient@medchain.com",
+  "password": "Password123!"
+}
+```
+**Response (200 OK)**:
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "id": "74c69b76-f5b6-48cc-9518-994a4c8c4d25",
   "name": "Alice Johnson",
   "email": "patient@medchain.com",
-  "password": "patient123",
   "role": "PATIENT",
-  "phone": "+1 555-0199",
-  "attributes": {
-    "hospital": "City General Hospital"
-  }
+  "pseudonymId": "0xa0fd1e25629296936ee4b138b788ef6df76d2b2ea2c4fa8c1de8714d5feb6a87",
+  "attributes": {}
 }
 ```
 
 ---
 
-## 2. Medical Record Endpoints
+## 3. Medical Record Controller (`/api/records`)
 
-### `POST /api/records/upload` (Role: PATIENT)
-Upload a new medical file. The backend executes:
-1. AES-256-GCM authenticated file encryption
-2. IPFS upload via Kubo API
-3. CP-ABE key protection
-4. Ethereum smart contract record registration
+| Endpoint | Method | Role | Summary |
+|---|---|---|---|
+| `/api/records/upload` | `POST` | `PATIENT`, `ADMIN` | Upload & encrypt medical record with CP-ABE policy |
+| `/api/records/upload-file` | `POST` | `PATIENT`, `ADMIN` | Multipart file upload with automated encryption pipeline |
+| `/api/records/patient/{patientId}` | `GET` | Authenticated | Get all records owned by a patient |
+| `/api/records/doctor/authorized` | `GET` | `DOCTOR`, `ADMIN` | Get records accessible to the authenticated doctor |
+| `/api/records/{recordId}/view` | `GET` | `PATIENT`, `DOCTOR`, `ADMIN` | View record content with real-time AI anomaly scoring |
+| `/api/records/{recordId}/download` | `GET` | `PATIENT`, `DOCTOR`, `ADMIN` | Decrypt & download original file with integrity check |
+| `/api/records/{recordId}/grant/{doctorId}` | `POST` | `PATIENT`, `ADMIN` | Explicitly authorize a doctor and generate PRE key |
+| `/api/records/{recordId}/revoke/{doctorId}` | `POST` | `PATIENT`, `ADMIN` | Revoke a doctor's access & invalidate PRE key |
 
-**Request Body**:
+### `POST /api/records/upload`
+**Request Payload**:
 ```json
 {
-  "title": "Echocardiogram Lab Report",
-  "description": "Routine cardiac checkup results",
+  "title": "Complete Blood Count & Metabolic Panel",
+  "description": "Routine annual clinical screening lab report",
   "recordType": "LAB_REPORT",
-  "accessPolicy": "specialty:CARDIOLOGY AND hospital:City General Hospital",
-  "content": "data:text/plain;base64,SGVhbHRoIFJlY29yZCBDb250ZW50...",
-  "fileName": "cardio_report.pdf",
-  "fileSize": "142.5 KB",
-  "fileMimeType": "text/plain"
+  "accessPolicy": "(specialty=Cardiology AND hospital=CityHospital) OR (license=Senior)",
+  "content": "data:application/pdf;base64,JVBERi0xLjQKJeLjz9MKMSAwIG9ia...",
+  "fileName": "blood_test_results.pdf",
+  "fileSize": "1.2 MB",
+  "fileMimeType": "application/pdf"
+}
+```
+**Response (200 OK)**:
+```json
+{
+  "id": "e035a925-26e6-4a0a-b268-34ec60b4e28e",
+  "title": "Complete Blood Count & Metabolic Panel",
+  "fileName": "blood_test_results.pdf",
+  "sha256Hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "accessPolicy": "(specialty=Cardiology AND hospital=CityHospital) OR (license=Senior)",
+  "policyHash": "0x4b8e21a0",
+  "blockchainTxHash": "0x9e4a36da194028fa27ffca410db31c3d78ceaecebbd9f5fd928b12a857423d00",
+  "uploadedAt": "2026-11-03T10:15:30"
 }
 ```
 
-### `GET /api/records/patient/{patientId}` (Authenticated)
-Retrieve all records uploaded by a patient.
-
-### `GET /api/records/doctor/authorized` (Role: DOCTOR)
-Retrieve all records for which the doctor has been granted access.
-
-### `POST /api/records/{recordId}/grant/{doctorId}` (Role: PATIENT)
-Grant doctor access to a record and generate Proxy Re-Encryption (PRE) delegation key.
-
-### `POST /api/records/{recordId}/revoke/{doctorId}` (Role: PATIENT)
-Revoke access and invalidate the PRE key for forward security.
-
-### `GET /api/records/{recordId}/view` (Role: DOCTOR)
-Request record decryption. Performs real-time Isolation Forest anomaly scoring and returns:
+### `GET /api/records/{recordId}/view`
+**Response (200 OK)**:
 ```json
 {
-  "record": { "id": "...", "title": "..." },
-  "riskScore": 14,
-  "status": "SAFE",
+  "record": {
+    "id": "e035a925-26e6-4a0a-b268-34ec60b4e28e",
+    "title": "Complete Blood Count & Metabolic Panel",
+    "fileName": "blood_test_results.pdf",
+    "content": "data:application/pdf;base64,JVBERi0xLjQKJeLjz9MKMSAwIG9ia...",
+    "sha256Hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "anomalyScore": 0.12,
   "riskLevel": "LOW",
-  "decryptionStatus": "AES_PRE_APPLIED",
-  "blockchainTxHash": "0x8f2a9b...",
-  "decryptedContent": "data:text/plain;base64,..."
+  "accessGranted": true,
+  "message": "Access authorized. Real-time threat evaluation verified normal behavior."
 }
 ```
 
 ---
 
-## 3. Metrics & Monitoring Endpoints
+## 4. Administrator Controller (`/api/admin`)
 
-### `GET /api/metrics` (Authenticated)
-Get live latency, memory, CPU, and service health metrics:
+| Endpoint | Method | Role | Summary |
+|---|---|---|---|
+| `/api/admin/dashboard` | `GET` | `ADMIN` | Get system overview KPIs & subsystem statuses |
+| `/api/admin/users` | `GET` | `ADMIN` | List all registered users with role & record counts |
+| `/api/admin/users/{userId}/deactivate` | `POST` | `ADMIN` | Deactivate account & immediately revoke sessions |
+| `/api/admin/users/{userId}/activate` | `POST` | `ADMIN` | Reactivate user account |
+| `/api/admin/users/{userId}/toggle-active` | `POST` | `ADMIN` | Toggle user active/inactive status |
+| `/api/admin/users/{userId}` | `DELETE` | `ADMIN` | Permanently remove user (preserves audit records) |
+| `/api/admin/users/{userId}/role` | `POST` | `ADMIN` | Assign new role (`PATIENT`, `DOCTOR`, `ADMIN`) |
+| `/api/admin/logs` | `GET` | `ADMIN` | View audit trail with pagination and anomaly filters |
+| `/api/admin/alerts` | `GET` | `ADMIN` | View unresolved Sentinel AI threat alerts |
+
+### `DELETE /api/admin/users/{userId}`
+**Response (200 OK)**:
 ```json
 {
-  "encryptionTimeMs": 12,
-  "blockchainLatencyMs": 245,
-  "apiResponseMs": 35,
-  "mlResponseMs": 62,
-  "cpuUsage": 32.4,
-  "memoryUsage": 58.6,
-  "heapUsedMB": 240,
-  "heapMaxMB": 512,
-  "services": {
-    "backend": true,
-    "mongodb": true,
-    "ml": true,
-    "blockchain": true,
-    "ipfs": true
-  }
+  "message": "User 'John Doe' (john@example.com) was permanently removed.",
+  "userId": "b8b9a787-f372-443c-be67-929d8e9568de",
+  "status": "DELETED"
 }
 ```
 
 ---
 
-## 4. Blockchain Explorer Endpoints
+## 5. Metrics & Sentinel AI Controller (`/api/metrics`)
 
-### `GET /api/blockchain/transactions`
-List recent Ethereum audit log events (`RecordUploaded`, `AccessGranted`, `AccessRevoked`, `RecordViewed`).
-
-### `GET /api/blockchain/stats`
-Summary statistics of on-chain ledger activity.
+| Endpoint | Method | Summary |
+|---|---|---|
+| `/api/metrics/health` | `GET` | Health status of Spring Boot, PostgreSQL, Hardhat EVM, and Sentinel AI |
+| `/api/metrics/live` | `GET` | Live telemetry (CPU load, memory allocation, request latency, active threads) |
+| `/api/metrics/threat-level` | `GET` | Aggregate anomaly score across recent accesses |
 
 ---
 
-## 5. Report Generation Endpoints (Role: ADMIN)
+## 6. Standard Error Response Structure
 
-- `GET /api/reports/access-logs.csv` — CSV download of all access logs
-- `GET /api/reports/access-logs.pdf` — Formatted PDF report download
-- `GET /api/reports/user-activity.csv` — CSV summary of user actions
+All exceptions return a standardized JSON error format:
+
+```json
+{
+  "message": "User-friendly description of the error",
+  "timestamp": "2026-11-03T14:44:00"
+}
+```
+
+| HTTP Status | Meaning | Typical Scenario |
+|---|---|---|
+| `400 Bad Request` | Validation Failure | Invalid email format, incorrect OTP, cooldown active |
+| `401 Unauthorized` | Authentication Failure | Missing or expired JWT token, invalid password |
+| `403 Forbidden` | Access Denied | Doctor does not satisfy CP-ABE policy, non-admin on admin route |
+| `404 Not Found` | Entity Missing | User ID or Record ID does not exist |
+| `500 Server Error` | Infrastructure Error | Database connectivity loss, unexpected runtime error |
