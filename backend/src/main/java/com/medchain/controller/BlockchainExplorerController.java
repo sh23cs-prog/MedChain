@@ -78,9 +78,12 @@ public class BlockchainExplorerController {
             .toList();
 
         List<Map<String, Object>> transactions = logs.stream().map(log -> {
-            String recordHash = recordRepository.findById(log.getRecordId())
-                    .map(r -> r.getSha256Hash() != null ? r.getSha256Hash() : "—")
-                    .orElse("—");
+            String recordHash = "—";
+            if (log.getRecordId() != null && !log.getRecordId().isBlank()) {
+                recordHash = recordRepository.findById(log.getRecordId())
+                        .map(r -> r.getSha256Hash() != null ? r.getSha256Hash() : "—")
+                        .orElse("—");
+            }
 
             String eventName = switch (log.getAction()) {
                 case "UPLOAD" -> "RecordUploaded";
