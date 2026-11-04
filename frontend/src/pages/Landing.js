@@ -175,7 +175,7 @@ export default function Landing() {
                       endIcon={<ArrowIcon />}
                       sx={{ px: 4, py: 1.5, fontSize: '1rem', fontWeight: 700 }}
                     >
-                      Sign In & Demo
+                      Sign In
                     </Button>
                     <Button
                       variant="outlined"

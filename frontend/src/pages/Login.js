@@ -11,7 +11,6 @@ import {
   Alert,
   IconButton,
   InputAdornment,
-  Divider,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -21,9 +20,6 @@ import {
   Visibility,
   VisibilityOff,
   LocalHospital as HospitalIcon,
-  Person as PersonIcon,
-  MedicalServices as DoctorIcon,
-  AdminPanelSettings as AdminIcon,
   LockReset as ResetIcon,
 } from '@mui/icons-material';
 import Navbar from '../components/shared/Navbar';
@@ -65,27 +61,6 @@ export default function Login() {
       else navigate('/');
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Login failed. Please check your credentials.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDemoLogin = async (demoEmail, demoPassword) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    setError('');
-    setLoading(true);
-
-    try {
-      const res = await authService.login({ email: demoEmail, password: demoPassword });
-      const user = res.data;
-      authLogin(user);
-      if (user.role === 'PATIENT') navigate('/patient');
-      else if (user.role === 'DOCTOR') navigate('/doctor');
-      else if (user.role === 'ADMIN') navigate('/admin');
-      else navigate('/');
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Demo login failed.');
     } finally {
       setLoading(false);
     }
@@ -200,39 +175,6 @@ export default function Login() {
               </Button>
             </Stack>
           </form>
-
-          <Divider sx={{ my: 3 }}>
-            <Typography variant="caption" color="text.secondary">
-              QUICK DEMO CREDENTIALS
-            </Typography>
-          </Divider>
-
-          <Stack spacing={1}>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<PersonIcon color="info" />}
-              onClick={() => handleDemoLogin('patient@medchain.com', 'Password123!')}
-            >
-              Patient: patient@medchain.com
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<DoctorIcon color="success" />}
-              onClick={() => handleDemoLogin('doctor@medchain.com', 'Password123!')}
-            >
-              Doctor: doctor@medchain.com
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<AdminIcon color="secondary" />}
-              onClick={() => handleDemoLogin('admin@medchain.com', 'Password123!')}
-            >
-              Admin: admin@medchain.com
-            </Button>
-          </Stack>
 
           <Box textAlign="center" mt={3}>
             <Typography variant="body2" color="text.secondary">
